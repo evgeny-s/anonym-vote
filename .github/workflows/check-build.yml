@@ -22,8 +22,14 @@ jobs:
       - name: Install packages
         run: npm ci
 
-      - name: Check format
-        run: npm run check-format
+      - name: Check UI format
+        run: npm run ui:check-format
 
-      - name: Run Build
-        run: npm run build
+      - name: Run UI Build
+        run: npm run ui:build
+
+      - name: Check API format
+        run: npm run ui:check-format
+
+      - name: Run API Build
+        run: npm run ui:build

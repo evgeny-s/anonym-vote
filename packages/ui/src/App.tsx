@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { useWallet } from './hooks/useWallet';
 import { useVotes } from './hooks/useVotes';
+import { useVoters } from './hooks/useVoters';
 import VoteScreen from './components/VoteScreen';
-import RevealScreen from './components/RevealScreen';
 import ResultsScreen from './components/ResultsScreen';
 import ParticipantsScreen from './components/ParticipantsScreen';
-import { ACTIVE_PROPOSAL } from './config.js';
+import { ACTIVE_PROPOSAL } from './config';
 
 const TABS = [
   { id: 'vote', label: 'Vote' },
-  { id: 'how', label: 'How it works' },
   { id: 'results', label: 'Results' },
   { id: 'participants', label: 'Participants' },
 ];
@@ -21,21 +20,16 @@ function shortAddr(addr) {
 
 export default function App() {
   const [tab, setTab] = useState('vote');
-  const wallet = useWallet();
+  const { voters, loading: votersLoading, error: votersError } = useVoters();
+  const wallet = useWallet(voters);
   const {
-    votes,
     tally,
     loading,
     error,
+    progress,
     alreadyVoted,
-    participants,
     isPastDeadline,
     refresh,
-    decrypting,
-    decryptProgress,
-    decryptError,
-    decrypted,
-    retryDecrypt,
   } = useVotes(wallet.address);
 
   return (
@@ -52,7 +46,7 @@ export default function App() {
               className="proposal-chip"
               style={{ color: 'var(--yes)', borderColor: 'rgba(34,197,94,.3)' }}
             >
-              🔓 unlocked
+              closed
             </span>
           )}
         </div>
@@ -97,6 +91,11 @@ export default function App() {
       </header>
 
       {wallet.error && <div className="wallet-error">{wallet.error}</div>}
+      {votersError && (
+        <div className="wallet-error">
+          Failed to load voter list from faucet: {votersError}
+        </div>
+      )}
 
       <nav className="tabs">
         {TABS.map((t) => (
@@ -109,11 +108,8 @@ export default function App() {
             {t.id === 'vote' && alreadyVoted && (
               <span className="tab-dot done" />
             )}
-            {t.id === 'results' && votes.length > 0 && (
-              <span className="tab-count">{votes.length}</span>
-            )}
-            {t.id === 'results' && isPastDeadline && decrypted && (
-              <span className="tab-dot done" />
+            {t.id === 'results' && tally && tally.totalVoted > 0 && (
+              <span className="tab-count">{tally.totalVoted}</span>
             )}
           </button>
         ))}
@@ -127,29 +123,23 @@ export default function App() {
             onVoted={refresh}
           />
         )}
-        {tab === 'how' && (
-          <RevealScreen
-            isPastDeadline={isPastDeadline}
-            onNavigateResults={() => setTab('results')}
-          />
-        )}
         {tab === 'results' && (
           <ResultsScreen
             tally={tally}
-            votes={votes}
             loading={loading}
             error={error}
+            progress={progress}
             refresh={refresh}
             isPastDeadline={isPastDeadline}
-            decrypting={decrypting}
-            decryptProgress={decryptProgress}
-            decryptError={decryptError}
-            decrypted={decrypted}
-            retryDecrypt={retryDecrypt}
+            voters={voters}
           />
         )}
         {tab === 'participants' && (
-          <ParticipantsScreen participants={participants} loading={loading} />
+          <ParticipantsScreen
+            voters={voters}
+            totalVoted={tally?.totalVoted ?? 0}
+            loading={loading || votersLoading}
+          />
         )}
       </main>
     </div>

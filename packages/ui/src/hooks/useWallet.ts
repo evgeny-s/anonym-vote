@@ -4,11 +4,18 @@ import {
   web3Accounts,
   web3FromAddress,
 } from '@polkadot/extension-dapp';
-import { ALLOWED_VOTERS } from '../config';
 
 const APP_NAME = 'Anon Vote';
 
-export function useWallet() {
+/**
+ * Wallet hook.
+ *
+ * `voters` is the allowlist fetched from the faucet API at app boot. While
+ * the list is empty (still loading) every account is considered "not
+ * allowed"; once it arrives the hook re-evaluates the connected account
+ * against it.
+ */
+export function useWallet(voters: string[]) {
   const [accounts, setAccounts] = useState([]);
   const [selected, setSelected] = useState(null);
   const [status, setStatus] = useState('idle');
@@ -19,6 +26,17 @@ export function useWallet() {
     const saved = localStorage.getItem('anon-vote:address');
     if (saved) silentReconnect(saved);
   }, []);
+
+  // Re-evaluate `isAllowed` whenever the voter list arrives or the
+  // selected account changes. Without this, an account that connects
+  // before voters loads would stay flagged as not-allowed forever.
+  useEffect(() => {
+    if (!selected) {
+      setIsAllowed(false);
+      return;
+    }
+    setIsAllowed(voters.includes(selected.address));
+  }, [voters, selected]);
 
   async function silentReconnect(savedAddress) {
     try {
@@ -36,7 +54,6 @@ export function useWallet() {
 
   function applyAccount(account) {
     setSelected(account);
-    setIsAllowed(ALLOWED_VOTERS.includes(account.address));
     setStatus('connected');
     localStorage.setItem('anon-vote:address', account.address);
   }
@@ -58,13 +75,13 @@ export function useWallet() {
         );
       }
       setAccounts(all);
-      const allowed = all.find((a) => ALLOWED_VOTERS.includes(a.address));
+      const allowed = all.find((a) => voters.includes(a.address));
       applyAccount(allowed ?? all[0]);
     } catch (e) {
       setError(e.message);
       setStatus('error');
     }
-  }, []);
+  }, [voters]);
 
   const disconnect = useCallback(() => {
     setSelected(null);
