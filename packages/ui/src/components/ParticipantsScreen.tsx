@@ -1,15 +1,18 @@
-import { ALLOWED_VOTERS } from '../config';
-
 function shortAddr(addr: string) {
   return addr.slice(0, 8) + '…' + addr.slice(-6);
 }
 
 interface Props {
+  voters: string[];
   totalVoted: number;
   loading: boolean;
 }
 
-export default function ParticipantsScreen({ totalVoted, loading }: Props) {
+export default function ParticipantsScreen({
+  voters,
+  totalVoted,
+  loading,
+}: Props) {
   if (loading) {
     return (
       <div className="vs-status">
@@ -23,11 +26,11 @@ export default function ParticipantsScreen({ totalVoted, loading }: Props) {
     <div className="part-root">
       <div className="part-summary">
         <span className="part-pill voted">{totalVoted} voted</span>
-        <span className="part-pill total">{ALLOWED_VOTERS.length} total</span>
+        <span className="part-pill total">{voters.length} total</span>
       </div>
 
       <div className="part-list">
-        {ALLOWED_VOTERS.map((addr) => (
+        {voters.map((addr) => (
           <div key={addr} className="part-row">
             <div
               className="part-avatar"

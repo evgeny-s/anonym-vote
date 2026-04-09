@@ -134,6 +134,10 @@ export class FaucetService {
     return this.subtensor.getCoordAddress();
   }
 
+  getAllowedVoters(): string[] {
+    return [...this.config.allowedVoters];
+  }
+
   private mustDecodeAddress(addr: string, field: string): Uint8Array {
     try {
       return decodeAddress(addr);

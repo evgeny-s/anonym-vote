@@ -12,6 +12,12 @@ export class FaucetController {
     return { address: this.faucet.getCoordAddress() };
   }
 
+  /** Allowlist of SS58 addresses that may vote on the current proposal. */
+  @Get('voters')
+  getVoters(): { voters: string[] } {
+    return { voters: this.faucet.getAllowedVoters() };
+  }
+
   /**
    * Fund the stealth address (if needed) and return a coordinator-signed
    * credential. The UI embeds this credential in the remark it publishes

@@ -48,6 +48,30 @@ export function getCoordPubkey(): Promise<string> {
   return coordPubkeyPromise;
 }
 
+let votersPromise: Promise<string[]> | null = null;
+
+export function getVoters(): Promise<string[]> {
+  if (!votersPromise) {
+    votersPromise = (async () => {
+      const res = await fetch(faucetUrl('/faucet/voters'));
+      if (!res.ok) {
+        throw new Error(
+          `Faucet /voters error ${res.status}: ${res.statusText}`,
+        );
+      }
+      const body = (await res.json()) as { voters?: string[] };
+      if (!Array.isArray(body?.voters)) {
+        throw new Error('Faucet /voters returned no voter list');
+      }
+      return body.voters;
+    })().catch((err) => {
+      votersPromise = null;
+      throw err;
+    });
+  }
+  return votersPromise;
+}
+
 /**
  * Request a credential (and funding) for a stealth address.
  *

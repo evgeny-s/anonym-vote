@@ -1,4 +1,4 @@
-import { ACTIVE_PROPOSAL, ALLOWED_VOTERS } from '../config';
+import { ACTIVE_PROPOSAL } from '../config';
 import type { Tally } from '../crypto';
 
 function Bar({
@@ -35,6 +35,7 @@ interface Props {
   progress: { scanned: number; total: number };
   refresh: () => void;
   isPastDeadline: boolean;
+  voters: string[];
 }
 
 export default function ResultsScreen({
@@ -44,6 +45,7 @@ export default function ResultsScreen({
   progress,
   refresh,
   isPastDeadline,
+  voters,
 }: Props) {
   if (loading) {
     const pct =
@@ -100,7 +102,7 @@ export default function ResultsScreen({
           <div className="res-metric-label">Voted</div>
           <div className="res-metric-value">
             {t.totalVoted}
-            <span className="res-metric-denom">/{ALLOWED_VOTERS.length}</span>
+            <span className="res-metric-denom">/{voters.length}</span>
           </div>
         </div>
         <div className="res-metric">

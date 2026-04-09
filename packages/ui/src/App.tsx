@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useWallet } from './hooks/useWallet';
 import { useVotes } from './hooks/useVotes';
+import { useVoters } from './hooks/useVoters';
 import VoteScreen from './components/VoteScreen';
 import ResultsScreen from './components/ResultsScreen';
 import ParticipantsScreen from './components/ParticipantsScreen';
@@ -19,7 +20,8 @@ function shortAddr(addr) {
 
 export default function App() {
   const [tab, setTab] = useState('vote');
-  const wallet = useWallet();
+  const { voters, loading: votersLoading, error: votersError } = useVoters();
+  const wallet = useWallet(voters);
   const {
     tally,
     loading,
@@ -89,6 +91,11 @@ export default function App() {
       </header>
 
       {wallet.error && <div className="wallet-error">{wallet.error}</div>}
+      {votersError && (
+        <div className="wallet-error">
+          Failed to load voter list from faucet: {votersError}
+        </div>
+      )}
 
       <nav className="tabs">
         {TABS.map((t) => (
@@ -124,12 +131,14 @@ export default function App() {
             progress={progress}
             refresh={refresh}
             isPastDeadline={isPastDeadline}
+            voters={voters}
           />
         )}
         {tab === 'participants' && (
           <ParticipantsScreen
+            voters={voters}
             totalVoted={tally?.totalVoted ?? 0}
-            loading={loading}
+            loading={loading || votersLoading}
           />
         )}
       </main>
