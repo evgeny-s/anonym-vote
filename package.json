@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "check-format": "prettier --check src/**/*.*",
     "codestyle": "prettier 'src/**/*' --check --ignore-unknown",
     "format": "prettier --write \"src/**/*\""
   },
