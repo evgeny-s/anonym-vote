@@ -11,13 +11,18 @@ import {
   timelockDecrypt,
   mainnetClient,
   roundAt,
-  roundTime,
   Buffer,
+  ChainInfo,
 } from 'tlock-js';
 
-export const DRAND_CHAIN = {
+export const DRAND_CHAIN: ChainInfo = {
   genesis_time: 1692803367,
   period: 3,
+  public_key: '',
+  hash: '',
+  groupHash: '',
+  schemeID: '',
+  metadata: { beaconID: '' },
 };
 
 let _client = null;
@@ -29,11 +34,6 @@ export function getDrandClient() {
 /** Return the drand round number that fires at or just after deadlineMs. */
 export function deadlineToRound(deadlineMs) {
   return roundAt(deadlineMs, DRAND_CHAIN);
-}
-
-/** Return the timestamp (ms) when a given round fires. */
-export function roundToMs(round) {
-  return roundTime(DRAND_CHAIN, round);
 }
 
 /**

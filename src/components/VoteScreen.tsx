@@ -26,7 +26,10 @@ export default function VoteScreen({ wallet, alreadyVoted, onVoted }) {
 
   const proposal = ACTIVE_PROPOSAL;
   const deadline = new Date(proposal.deadline);
-  const daysLeft = Math.max(0, Math.ceil((deadline - Date.now()) / 86400000));
+  const daysLeft = Math.max(
+    0,
+    Math.ceil((deadline.getTime() - Date.now()) / 86400000),
+  );
 
   function pickChoice(choice) {
     setSelected(choice);
@@ -124,7 +127,7 @@ export default function VoteScreen({ wallet, alreadyVoted, onVoted }) {
               <button
                 key={c.id}
                 className="vs-choice"
-                style={{ '--accent': c.color }}
+                style={{ '--accent': c.color } as React.CSSProperties}
                 disabled={!wallet.isAllowed}
                 onClick={() => pickChoice(c.id)}
               >
@@ -148,9 +151,11 @@ export default function VoteScreen({ wallet, alreadyVoted, onVoted }) {
         <div className="vs-review">
           <div
             className="vs-review-choice"
-            style={{
-              '--accent': CHOICES.find((c) => c.id === selected)?.color,
-            }}
+            style={
+              {
+                '--accent': CHOICES.find((c) => c.id === selected)?.color,
+              } as React.CSSProperties
+            }
           >
             You chose: <strong>{selected?.toUpperCase()}</strong>
           </div>

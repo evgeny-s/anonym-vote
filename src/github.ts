@@ -55,7 +55,7 @@ export async function writeFile(filePath, content, commitMessage) {
   const existing = await ghGet(
     `/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${filePath}?ref=${GITHUB_BRANCH}`,
   );
-  const body = {
+  const body: any = {
     message: commitMessage,
     content: btoa(JSON.stringify(content, null, 2)),
     branch: GITHUB_BRANCH,
