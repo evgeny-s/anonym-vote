@@ -1,110 +1,75 @@
 import { useState, useEffect, useCallback } from 'react';
-import { loadVotes, hasVoted } from '../github';
-import { decryptChoice, tallyDecrypted } from '../crypto';
-import { ALLOWED_VOTERS, ACTIVE_PROPOSAL } from '../config';
+import { getCurrentBlock, scanRemarks } from '../subtensor';
+import { tallyRemarks } from '../crypto';
+import type { AcceptedVote, Tally } from '../crypto';
+import { ACTIVE_PROPOSAL } from '../config';
+import { getCoordPubkey } from '../faucet';
+import { peekStealth } from '../stealth';
 
-export function useVotes(address) {
-  const [votes, setVotes] = useState([]);
-  const [tally, setTally] = useState(null);
+export function useVotes(realAddress: string | null) {
+  const [votes, setVotes] = useState<AcceptedVote[]>([]);
+  const [tally, setTally] = useState<Tally | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState({ scanned: 0, total: 0 });
   const [alreadyVoted, setAlreadyVoted] = useState(false);
-  const [error, setError] = useState(null);
-
-  const [decrypting, setDecrypting] = useState(false);
-  const [decryptProgress, setDecryptProgress] = useState(0); // 0-100
-  const [decryptError, setDecryptError] = useState(null);
-  const [decrypted, setDecrypted] = useState(false); // true after successful run
 
   const proposalId = ACTIVE_PROPOSAL.id;
-  const deadline = new Date(ACTIVE_PROPOSAL.deadline);
-  const isPastDeadline = Date.now() > deadline.getTime();
+  const startBlock = ACTIVE_PROPOSAL.startBlock;
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const v = await loadVotes(proposalId);
+      const coordPubkey = await getCoordPubkey();
+      const current = await getCurrentBlock();
+      const endBlock = Math.max(startBlock, current);
+      setProgress({ scanned: 0, total: endBlock - startBlock + 1 });
+
+      const raw = await scanRemarks(startBlock, endBlock, {
+        onProgress: setProgress,
+      });
+      const { tally: t, votes: v } = tallyRemarks(raw, {
+        proposalId,
+        coordPubkey,
+      });
+      setTally(t);
       setVotes(v);
 
-      if (address) {
-        const voted = await hasVoted(proposalId, address);
-        setAlreadyVoted(voted);
+      if (realAddress) {
+        try {
+          const stealth = await peekStealth(realAddress);
+          setAlreadyVoted(
+            stealth ? v.some((vote) => vote.s === stealth.address) : false,
+          );
+        } catch {
+          setAlreadyVoted(false);
+        }
+      } else {
+        setAlreadyVoted(false);
       }
-    } catch (e) {
-      setError(e.message);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
     } finally {
       setLoading(false);
     }
-  }, [proposalId, address]);
+  }, [proposalId, startBlock, realAddress]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    if (!isPastDeadline) return;
-    if (votes.length === 0) return;
-    if (decrypting || decrypted) return;
-    runDecrypt(votes);
-  }, [isPastDeadline, votes, decrypted]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function runDecrypt(voteList) {
-    setDecrypting(true);
-    setDecryptError(null);
-    setDecryptProgress(0);
-
-    const results = [];
-    for (let i = 0; i < voteList.length; i++) {
-      const vote = voteList[i];
-      try {
-        const choice = await decryptChoice(vote.ciphertext);
-        results.push({
-          nullifier: vote.nullifier,
-          address: vote.address,
-          choice,
-        });
-      } catch (e) {
-        results.push({
-          nullifier: vote.nullifier,
-          address: vote.address,
-          choice: null,
-          error: e.message,
-        });
-      }
-      setDecryptProgress(Math.round(((i + 1) / voteList.length) * 100));
-    }
-
-    setTally(tallyDecrypted(results));
-    setDecrypting(false);
-    setDecrypted(true);
-  }
-
-  const retryDecrypt = useCallback(() => {
-    if (votes.length === 0) return;
-    setDecrypted(false);
-    setTally(null);
-    runDecrypt(votes);
-  }, [votes]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const votedAddresses = new Set(votes.map((v) => v.address));
-  const participants = ALLOWED_VOTERS.map((addr) => ({
-    address: addr,
-    voted: votedAddresses.has(addr),
-  }));
+  const deadline = new Date(ACTIVE_PROPOSAL.deadline);
+  const isPastDeadline = Date.now() > deadline.getTime();
 
   return {
     votes,
     tally,
     loading,
     error,
+    progress,
     alreadyVoted,
-    participants,
     isPastDeadline,
     refresh,
-    decrypting,
-    decryptProgress,
-    decryptError,
-    decrypted,
-    retryDecrypt,
   };
 }

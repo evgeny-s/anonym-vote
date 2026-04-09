@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import {
-  encryptChoice,
-  makeNullifier,
-  nullifierMessage,
-  buildVoteArtifact,
-} from '../crypto';
-import { saveVote } from '../github';
+import { encodeRemark } from '../crypto';
+import type { Choice } from '../crypto';
+import { fundRequestMessage } from '../crypto';
 import { ACTIVE_PROPOSAL } from '../config';
+import { getOrCreateStealth } from '../stealth';
+import type { Stealth } from '../stealth';
+import { requestCredential, isDevStub } from '../faucet';
+import { sendRemark, waitForBalance } from '../subtensor';
 
-const CHOICES = [
+const CHOICES: { id: Choice; label: string; sub: string; color: string }[] = [
   { id: 'yes', label: 'Yes', sub: 'Support the proposal', color: '#22c55e' },
   { id: 'no', label: 'No', sub: 'Reject the proposal', color: '#ef4444' },
   {
@@ -19,10 +19,31 @@ const CHOICES = [
   },
 ];
 
+// Minimum stealth balance (planck) before we try to submit the remark.
+// TAO has 9 decimals; 10_000_000 planck = 0.01 TAO — enough headroom for a
+// single system.remark fee on Finney.
+const MIN_STEALTH_BALANCE = 10_000_000n;
+
+function shortAddr(addr?: string | null) {
+  if (!addr) return '';
+  return addr.slice(0, 8) + '…' + addr.slice(-6);
+}
+
+type Phase =
+  | 'pick'
+  | 'review'
+  | 'signing'
+  | 'funding'
+  | 'submitting'
+  | 'done'
+  | 'error';
+
 export default function VoteScreen({ wallet, alreadyVoted, onVoted }) {
-  const [phase, setPhase] = useState('pick');
-  const [selected, setSelected] = useState(null);
+  const [phase, setPhase] = useState<Phase>('pick');
+  const [selected, setSelected] = useState<Choice | null>(null);
   const [errMsg, setErrMsg] = useState('');
+  const [stealth, setStealth] = useState<Stealth | null>(null);
+  const [blockHash, setBlockHash] = useState<string | null>(null);
 
   const proposal = ACTIVE_PROPOSAL;
   const deadline = new Date(proposal.deadline);
@@ -31,69 +52,74 @@ export default function VoteScreen({ wallet, alreadyVoted, onVoted }) {
     Math.ceil((deadline.getTime() - Date.now()) / 86400000),
   );
 
-  function pickChoice(choice) {
-    setSelected(choice);
-    setPhase('confirm');
-  }
-
-  async function castVote() {
-    setErrMsg('');
-    try {
-      setPhase('encrypting');
-      const { ciphertext, round } = await encryptChoice(
-        selected,
-        deadline.getTime(),
-      );
-
-      setPhase('signing');
-      const msg = nullifierMessage(proposal.id);
-      const sig = await wallet.sign(msg);
-
-      const nul = await makeNullifier(proposal.id, wallet.address, sig);
-
-      setPhase('saving');
-      const artifact = buildVoteArtifact({
-        proposalId: proposal.id,
-        address: wallet.address,
-        nullifier: nul,
-        ciphertext,
-        round,
-        signature: sig,
-      });
-      await saveVote(proposal.id, wallet.address, artifact);
-
-      setPhase('done');
-      onVoted?.();
-    } catch (e) {
-      setErrMsg(e.message);
-      setPhase('error');
-    }
-  }
-
   function reset() {
     setSelected(null);
+    setStealth(null);
+    setBlockHash(null);
     setPhase('pick');
     setErrMsg('');
   }
 
-  if (alreadyVoted) {
+  function pick(choice: Choice) {
+    setSelected(choice);
+    setPhase('review');
+  }
+
+  async function castVote() {
+    if (!selected) return;
+    setErrMsg('');
+    setPhase('signing');
+    try {
+      // 1. Generate (or reuse) the session stealth wallet for this voter.
+      const st = await getOrCreateStealth(wallet.address);
+      setStealth(st);
+
+      // 2. Real wallet signs the fund-request message. Does NOT reveal choice.
+      const msg = fundRequestMessage(proposal.id, st.address);
+      const realSig = await wallet.sign(msg);
+
+      // 3. Ask the faucet for a credential (and for funding, in real mode).
+      const cred = await requestCredential({
+        proposalId: proposal.id,
+        stealthAddress: st.address,
+        realAddress: wallet.address,
+        realSignature: realSig,
+      });
+
+      // 4. Wait for the stealth address to become fundable.
+      setPhase('funding');
+      await waitForBalance(st.address, MIN_STEALTH_BALANCE);
+
+      // 5. Build and submit the remark. Chain now only sees the stealth.
+      setPhase('submitting');
+      const payload = encodeRemark({
+        proposalId: proposal.id,
+        stealthAddress: st.address,
+        nullifier: cred.nullifier,
+        choice: selected,
+        credSig: cred.credSig,
+      });
+      const { blockHash: bh } = await sendRemark(st.pair, payload);
+      setBlockHash(bh);
+
+      setPhase('done');
+      onVoted?.();
+    } catch (e: any) {
+      setErrMsg(e?.message ?? String(e));
+      setPhase('error');
+    }
+  }
+
+  if (alreadyVoted && phase !== 'done') {
     return (
       <div className="vs-already">
         <div className="vs-already-icon">✓</div>
-        <h3>Vote recorded</h3>
+        <h3>Vote already on chain</h3>
         <p>
-          Your encrypted vote is stored on GitHub. Results will be automatically
-          revealed after the deadline on{' '}
-          <strong>{deadline.toLocaleDateString()}</strong>. No action needed
-          from you.
+          A vote from this browser's stealth wallet is already accepted into
+          the subtensor chain for proposal <strong>{proposal.id}</strong>.
+          Further attempts are dropped by the on-chain nullifier check.
         </p>
-        <div className="vs-tlock-note">
-          <span className="vs-tlock-icon">🔒</span>
-          <span>
-            Your choice is time-locked with drand — unreadable by anyone until
-            the deadline round fires.
-          </span>
-        </div>
       </div>
     );
   }
@@ -129,7 +155,7 @@ export default function VoteScreen({ wallet, alreadyVoted, onVoted }) {
                 className="vs-choice"
                 style={{ '--accent': c.color } as React.CSSProperties}
                 disabled={!wallet.isAllowed}
-                onClick={() => pickChoice(c.id)}
+                onClick={() => pick(c.id)}
               >
                 <span className="vs-choice-label">{c.label}</span>
                 <span className="vs-choice-sub">{c.sub}</span>
@@ -137,17 +163,17 @@ export default function VoteScreen({ wallet, alreadyVoted, onVoted }) {
             ))}
           </div>
           <div className="vs-tlock-note">
-            <span className="vs-tlock-icon">🔒</span>
+            <span className="vs-tlock-icon">🕶</span>
             <span>
-              Your vote will be encrypted with{' '}
-              <strong>time-lock encryption</strong> (drand). No one can read it
-              until the deadline — not even you. No salt to save.
+              Your vote is published by a fresh stealth sr25519 wallet
+              generated in this browser. On-chain data never links back to
+              your real address.
             </span>
           </div>
         </>
       )}
 
-      {phase === 'confirm' && (
+      {phase === 'review' && selected && (
         <div className="vs-review">
           <div
             className="vs-review-choice"
@@ -157,50 +183,39 @@ export default function VoteScreen({ wallet, alreadyVoted, onVoted }) {
               } as React.CSSProperties
             }
           >
-            You chose: <strong>{selected?.toUpperCase()}</strong>
+            You chose: <strong>{selected.toUpperCase()}</strong>
           </div>
           <div className="vs-tlock-explain">
             <div className="vs-tlock-explain-title">What happens next</div>
             <ol className="vs-steps">
+              <li>A fresh stealth sr25519 wallet is generated in your browser.</li>
+              <li>Your real wallet signs a fund request — without your choice in it.</li>
               <li>
-                Your browser fetches the drand public key for round{' '}
-                <strong>
-                  {Math.floor((deadline.getTime() - 1692803367000) / 3000) + 1}
-                </strong>
+                The faucet funds the stealth address and returns a
+                coordinator-signed credential.
               </li>
               <li>
-                Your choice is encrypted locally — ciphertext only stored on
-                GitHub
+                The stealth wallet publishes a <code>system.remark</code> with
+                your choice + credential.
               </li>
-              <li>
-                You sign a nullifier with your wallet (choice is NOT in the
-                message)
-              </li>
-              <li>
-                After <strong>{deadline.toLocaleDateString()}</strong> anyone
-                can open the Results tab and the app decrypts everything
-                automatically
-              </li>
+              <li>On-chain there is no link back to your real address.</li>
             </ol>
+            {isDevStub() && (
+              <div className="vs-warn" style={{ marginTop: '1rem' }}>
+                Dev stub mode: the local faucet does NOT fund the stealth
+                address. You must manually transfer a small amount of TAO to
+                it before the remark can go through.
+              </div>
+            )}
           </div>
           <div className="vs-review-actions">
             <button className="vs-btn-ghost" onClick={reset}>
               Back
             </button>
             <button className="vs-btn-primary" onClick={castVote}>
-              Encrypt &amp; submit
+              Sign &amp; submit
             </button>
           </div>
-        </div>
-      )}
-
-      {phase === 'encrypting' && (
-        <div className="vs-status">
-          <div className="vs-spinner" />
-          <p>Encrypting your vote with drand time-lock…</p>
-          <small>
-            Fetching drand public key and computing IBE ciphertext locally.
-          </small>
         </div>
       )}
 
@@ -209,31 +224,54 @@ export default function VoteScreen({ wallet, alreadyVoted, onVoted }) {
           <div className="vs-spinner" />
           <p>Waiting for wallet signature…</p>
           <small>
-            Your choice is NOT in the message — only your identity is signed.
+            Your choice is NOT in the signed message — only the stealth address
+            is.
           </small>
         </div>
       )}
 
-      {phase === 'saving' && (
+      {phase === 'funding' && (
         <div className="vs-status">
           <div className="vs-spinner" />
-          <p>Saving encrypted vote to GitHub…</p>
+          <p>Waiting for the faucet to fund your stealth address…</p>
+          {stealth && (
+            <small>
+              Stealth: <code>{shortAddr(stealth.address)}</code>
+            </small>
+          )}
+          {isDevStub() && stealth && (
+            <div className="vs-warn" style={{ marginTop: '1rem' }}>
+              Dev stub mode: send a tiny bit of TAO to{' '}
+              <code style={{ wordBreak: 'break-all' }}>{stealth.address}</code>{' '}
+              manually to continue.
+            </div>
+          )}
+        </div>
+      )}
+
+      {phase === 'submitting' && (
+        <div className="vs-status">
+          <div className="vs-spinner" />
+          <p>Publishing remark on subtensor…</p>
         </div>
       )}
 
       {phase === 'done' && (
         <div className="vs-done">
           <div className="vs-done-icon">✓</div>
-          <h3>Vote locked in!</h3>
+          <h3>Vote submitted</h3>
           <p>
-            Your encrypted choice is on GitHub. Come back after{' '}
-            <strong>{deadline.toLocaleDateString()}</strong> — results will
-            decrypt automatically. Nothing to save.
+            The remark is in the block. On-chain it is signed by your stealth
+            address, which nobody can link back to your real wallet.
           </p>
-          <div className="vs-tlock-note">
-            <span className="vs-tlock-icon">🔒</span>
-            <span>Time-locked until drand round fires at deadline.</span>
-          </div>
+          {blockHash && (
+            <div className="vs-tlock-note" style={{ wordBreak: 'break-all' }}>
+              <span className="vs-tlock-icon">⛓</span>
+              <span>
+                Included in block <code>{blockHash}</code>
+              </span>
+            </div>
+          )}
         </div>
       )}
 
