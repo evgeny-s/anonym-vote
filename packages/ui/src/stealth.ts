@@ -35,7 +35,9 @@ function storageKey(realAddress: string): string {
  * Get or create the stealth keypair for this (proposal, realAddress) pair.
  * Idempotent within a single tab session.
  */
-export async function getOrCreateStealth(realAddress: string): Promise<Stealth> {
+export async function getOrCreateStealth(
+  realAddress: string,
+): Promise<Stealth> {
   await ensureCryptoReady();
   const key = storageKey(realAddress);
   let mnemonic = sessionStorage.getItem(key);
@@ -52,7 +54,9 @@ export async function getOrCreateStealth(realAddress: string): Promise<Stealth> 
  * Peek at the existing stealth wallet without creating one. Returns null if
  * the current session hasn't generated one yet.
  */
-export async function peekStealth(realAddress: string): Promise<Stealth | null> {
+export async function peekStealth(
+  realAddress: string,
+): Promise<Stealth | null> {
   await ensureCryptoReady();
   const mnemonic = sessionStorage.getItem(storageKey(realAddress));
   if (!mnemonic) return null;

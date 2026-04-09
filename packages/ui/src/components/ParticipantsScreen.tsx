@@ -52,10 +52,10 @@ export default function ParticipantsScreen({
           <strong>Public:</strong> the list of eligible voters, and the total
           count of valid remarks published on chain.
           <br />
-          <strong>Private:</strong> which of these addresses has actually
-          voted, and how. Each vote is published by a one-shot stealth
-          sr25519 account generated in the voter's browser; the on-chain data
-          never links back to the real wallet.
+          <strong>Private:</strong> which of these addresses has actually voted,
+          and how. Each vote is published by a one-shot stealth sr25519 account
+          generated in the voter's browser; the on-chain data never links back
+          to the real wallet.
         </p>
       </div>
     </div>

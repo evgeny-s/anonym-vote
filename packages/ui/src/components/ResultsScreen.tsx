@@ -161,8 +161,8 @@ export default function ResultsScreen({
           Each vote is a <code>system.remark</code> extrinsic signed by a
           one-shot stealth sr25519 account generated in the voter's browser.
           Eligibility is proved by a coordinator signature over the stealth
-          address — never by the voter's real wallet. On-chain data contains
-          no link between real voters and their choices, and tallying does not
+          address — never by the voter's real wallet. On-chain data contains no
+          link between real voters and their choices, and tallying does not
           require that link either.
         </p>
       </div>
