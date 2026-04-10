@@ -1,5 +1,26 @@
 import type { Tally } from '../crypto';
-import type { Proposal } from '../faucet';
+import type { IndexedRemark, Proposal } from '../faucet';
+import { SUBTENSOR_WS } from '../config';
+
+/**
+ * Build a polkadot.js Apps explorer link for a given block hash, using
+ * the same Subtensor WS endpoint the UI is configured to talk to. The
+ * `rpc` query parameter is intentionally NOT URL-encoded — that's the
+ * shape polkadot.js apps expects (e.g. the public link in the README).
+ */
+function explorerLink(blockHash: string): string {
+  return `https://polkadot.js.org/apps/?rpc=${SUBTENSOR_WS}#/explorer/query/${blockHash}`;
+}
+
+function shortHash(h: string): string {
+  if (!h) return '';
+  return h.length > 14 ? `${h.slice(0, 10)}…${h.slice(-6)}` : h;
+}
+
+function shortAddr(a: string): string {
+  if (!a) return '';
+  return a.length > 14 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+}
 
 function Bar({
   label,
@@ -31,25 +52,31 @@ function Bar({
 interface Props {
   tally: Tally | null;
   loading: boolean;
+  refreshing: boolean;
   error: string | null;
   progress: { scanned: number; total: number };
   refresh: () => void;
   isPastDeadline: boolean;
   voters: string[];
   proposal: Proposal;
+  indexedRemarks: IndexedRemark[];
+  indexerStatus: 'indexing' | 'ready' | null;
 }
 
 export default function ResultsScreen({
   tally,
   loading,
+  refreshing,
   error,
   progress,
   refresh,
   isPastDeadline,
   voters,
   proposal,
+  indexedRemarks,
+  indexerStatus,
 }: Props) {
-  if (loading) {
+  if (loading && !tally) {
     const pct =
       progress.total > 0
         ? Math.min(100, Math.round((progress.scanned / progress.total) * 100))
@@ -57,10 +84,11 @@ export default function ResultsScreen({
     return (
       <div className="vs-status">
         <div className="vs-spinner" />
-        <p>Scanning subtensor blocks for vote remarks…</p>
+        <p>Backend is indexing subtensor blocks…</p>
         {progress.total > 0 && (
           <small>
-            {progress.scanned} / {progress.total} blocks ({pct}%)
+            {progress.scanned.toLocaleString()} /{' '}
+            {progress.total.toLocaleString()} blocks ({pct}%)
           </small>
         )}
       </div>
@@ -97,8 +125,36 @@ export default function ResultsScreen({
     else outcome = 'Tied';
   }
 
+  const indexerPct =
+    progress.total > 0
+      ? Math.min(100, Math.round((progress.scanned / progress.total) * 100))
+      : 0;
+
   return (
     <div className="res-root">
+      {indexerStatus === 'indexing' && (
+        <div className="res-indexing">
+          <div className="res-indexing-row">
+            <div className="vs-spinner" style={{ width: 18, height: 18 }} />
+            <div>
+              <strong>Backend is indexing chain…</strong>
+              <p>
+                {indexedRemarks.length > 0
+                  ? `${indexedRemarks.length} remark(s) indexed so far — the tally below updates live as new blocks land.`
+                  : 'No vote remarks indexed yet — the tally below will fill in as blocks are processed.'}
+              </p>
+            </div>
+            <span className="res-indexing-pct">{indexerPct}%</span>
+          </div>
+          <div className="res-progress-track">
+            <div
+              className="res-progress-fill"
+              style={{ width: `${indexerPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="res-metrics">
         <div className="res-metric">
           <div className="res-metric-label">Voted</div>
@@ -157,6 +213,39 @@ export default function ResultsScreen({
         )}
       </div>
 
+      {indexedRemarks.length > 0 && (
+        <div className="res-card">
+          <div className="res-card-title">
+            Indexed remark blocks ({indexedRemarks.length})
+          </div>
+          <p className="res-blocks-hint">
+            Every <code>system.remark</code> the backend has indexed since
+            block <code>{progress.total > 0 ? `#${proposal.startBlock}` : '…'}</code>.
+            Click any block hash to open it in the polkadot.js explorer and
+            verify the extrinsic for yourself.
+          </p>
+          <div className="res-blocks">
+            {indexedRemarks.map((r) => (
+              <a
+                key={`${r.blockNumber}-${r.blockHash}`}
+                className="res-block-row"
+                href={explorerLink(r.blockHash)}
+                target="_blank"
+                rel="noreferrer"
+                title="Open on polkadot.js Apps"
+              >
+                <span className="res-block-num">#{r.blockNumber}</span>
+                <span className="res-block-hash">{shortHash(r.blockHash)}</span>
+                <span className="res-block-signer">
+                  {shortAddr(r.signer)}
+                </span>
+                <span className="res-block-arrow">↗</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="res-privacy">
         <div className="res-privacy-title">Privacy guarantee</div>
         <p>
@@ -169,8 +258,12 @@ export default function ResultsScreen({
         </p>
       </div>
 
-      <button className="vs-btn-ghost res-refresh" onClick={refresh}>
-        ↻ Refresh
+      <button
+        className="vs-btn-ghost res-refresh"
+        onClick={refresh}
+        disabled={refreshing}
+      >
+        {refreshing ? '↻ Refreshing…' : '↻ Refresh'}
       </button>
     </div>
   );

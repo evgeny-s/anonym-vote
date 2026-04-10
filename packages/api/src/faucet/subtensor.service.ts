@@ -58,6 +58,14 @@ export class SubtensorService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Public accessor for the singleton ApiPromise. Used by `IndexerService`
+   * to scan blocks on the same connection rather than opening a second one.
+   */
+  getApiConnection(): Promise<ApiPromise> {
+    return this.getApi();
+  }
+
+  /**
    * Get (and cache) the ApiPromise. We keep a single connection open for
    * the lifetime of the process — subtensor RPC endpoints are
    * rate-limited enough that reconnect churn would hurt.

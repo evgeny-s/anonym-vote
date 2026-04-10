@@ -1,20 +1,18 @@
 /**
  * Subtensor client — thin wrapper around @polkadot/api.
  *
- * Only the bits this app needs:
+ * The UI no longer scans the chain itself for vote remarks — that lives
+ * on the backend `IndexerService`. What's left here is the bits the
+ * voter flow still needs from chain directly:
+ *
  *   - getApi()            singleton ApiPromise
- *   - getCurrentBlock()   latest head block number
- *   - scanRemarks(a, b)   all system.remark extrinsics in [a..b]
  *   - sendRemark(pair, t) submit a signed system.remark extrinsic
  *   - waitForBalance(a,m) poll until address has >= m rao free balance
  */
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import type { KeyringPair } from '@polkadot/keyring/types';
-import { u8aToString } from '@polkadot/util';
 import { SUBTENSOR_WS } from './config';
-
-// ─── Singleton API connection ────────────────────────────────────────────
 
 let apiPromise: Promise<ApiPromise> | null = null;
 
@@ -25,87 +23,6 @@ export function getApi(): Promise<ApiPromise> {
   }
   return apiPromise;
 }
-
-// ─── Reads ───────────────────────────────────────────────────────────────
-
-export async function getCurrentBlock(): Promise<number> {
-  const api = await getApi();
-  const header = await api.rpc.chain.getHeader();
-  return header.number.toNumber();
-}
-
-export interface RawRemark {
-  blockNumber: number;
-  signer: string;
-  text: string;
-}
-
-/**
- * Scan blocks [fromBlock .. toBlock] inclusive, return every `system.remark`
- * extrinsic as { blockNumber, signer, text }. Extrinsics without a signer are
- * skipped (we only care about user-signed remarks).
- */
-export async function scanRemarks(
-  fromBlock: number,
-  toBlock: number,
-  opts?: { onProgress?: (p: { scanned: number; total: number }) => void },
-): Promise<RawRemark[]> {
-  const api = await getApi();
-  const total = Math.max(0, toBlock - fromBlock + 1);
-  const out: RawRemark[] = [];
-
-  // Modest parallelism — enough to saturate one WS connection without
-  // overwhelming the public RPC endpoint.
-  const CONCURRENCY = 8;
-  let next = fromBlock;
-  let scanned = 0;
-
-  async function worker() {
-    while (true) {
-      const n = next++;
-      if (n > toBlock) return;
-      try {
-        const hash = await api.rpc.chain.getBlockHash(n);
-        const signedBlock = await api.rpc.chain.getBlock(hash);
-        for (const ex of signedBlock.block.extrinsics) {
-          const { section, method } = ex.method;
-          if (section !== 'system' || method !== 'remark') continue;
-          if (!ex.isSigned) continue;
-          const arg = ex.method.args[0];
-          // `system.remark(remark: Bytes)` — arg is a Bytes (u8a with length prefix).
-          // `.toU8a(true)` drops the length prefix and gives us the raw payload.
-          let text: string;
-          try {
-            text = u8aToString((arg as any).toU8a(true));
-          } catch {
-            continue;
-          }
-          out.push({
-            blockNumber: n,
-            signer: ex.signer.toString(),
-            text,
-          });
-        }
-      } catch {
-        // One bad block shouldn't kill the whole scan.
-      } finally {
-        scanned++;
-        opts?.onProgress?.({ scanned, total });
-      }
-    }
-  }
-
-  const workers = Array.from(
-    { length: Math.min(CONCURRENCY, total || 1) },
-    () => worker(),
-  );
-  await Promise.all(workers);
-
-  out.sort((a, b) => a.blockNumber - b.blockNumber);
-  return out;
-}
-
-// ─── Writes ──────────────────────────────────────────────────────────────
 
 /**
  * Submit a `system.remark(text)` signed by `pair`. Resolves when the extrinsic

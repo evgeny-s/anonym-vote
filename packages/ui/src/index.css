@@ -1159,6 +1159,120 @@ body {
   line-height: 1.6;
 }
 
+/* Indexer status banner */
+.res-indexing {
+  background: var(--bg2);
+  border: 1px solid rgba(124, 110, 245, 0.25);
+  border-radius: var(--r-lg);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.res-indexing-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.res-indexing-row > div:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.res-indexing-row strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  display: block;
+  margin-bottom: 2px;
+}
+.res-indexing-row p {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+.res-indexing-pct {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent2);
+  flex-shrink: 0;
+}
+
+/* Indexed remark blocks list */
+.res-blocks-hint {
+  font-size: 12px;
+  color: var(--text3);
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+.res-blocks-hint code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent2);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.res-blocks {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.res-block-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr 18px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.12s;
+}
+.res-block-row:last-child {
+  border-bottom: none;
+}
+.res-block-row:hover {
+  background: var(--bg3);
+}
+.res-block-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent2);
+  font-weight: 700;
+}
+.res-block-hash,
+.res-block-signer {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.res-block-arrow {
+  color: var(--text3);
+  font-size: 12px;
+  text-align: right;
+}
+.res-block-row:hover .res-block-arrow {
+  color: var(--accent2);
+}
+@media (max-width: 540px) {
+  .res-block-row {
+    grid-template-columns: 64px 1fr 18px;
+  }
+  .res-block-signer {
+    display: none;
+  }
+}
+
 /* How-it-works trigger + modal */
 .hiw-trigger {
   width: 22px;

@@ -22,10 +22,20 @@
 
 import { decodeAddress, sr25519Verify } from '@polkadot/util-crypto';
 import { hexToU8a, stringToU8a } from '@polkadot/util';
-import type { RawRemark } from './subtensor';
 
 export type Choice = 'yes' | 'no' | 'abstain';
 export const CHOICES: Choice[] = ['yes', 'no', 'abstain'];
+
+/**
+ * Minimum shape `tallyRemarks` needs from each indexed extrinsic.
+ * The backend snapshot includes a `blockHash` field too, but the tally
+ * doesn't care about it.
+ */
+export interface RemarkLike {
+  blockNumber: number;
+  signer: string;
+  text: string;
+}
 
 export interface VotePayload {
   v: 1;
@@ -136,7 +146,7 @@ export function verifyCredential(
  * wins; later duplicates are silently dropped to defeat replay attempts.
  */
 export function tallyRemarks(
-  remarks: RawRemark[],
+  remarks: RemarkLike[],
   opts: { proposalId: string; coordPubkey: string | Uint8Array },
 ): { tally: Tally; votes: AcceptedVote[] } {
   const tally: Tally = { yes: 0, no: 0, abstain: 0, invalid: 0, totalVoted: 0 };

@@ -32,11 +32,14 @@ export default function App() {
   const {
     tally,
     loading,
+    refreshing,
     error,
     progress,
     alreadyVoted,
     isPastDeadline,
     refresh,
+    indexedRemarks,
+    indexerStatus,
   } = useVotes(wallet.address, proposal);
 
   return (
@@ -155,12 +158,15 @@ export default function App() {
               <ResultsScreen
                 tally={tally}
                 loading={loading}
+                refreshing={refreshing}
                 error={error}
                 progress={progress}
                 refresh={refresh}
                 isPastDeadline={isPastDeadline}
                 voters={voters}
                 proposal={proposal}
+                indexedRemarks={indexedRemarks}
+                indexerStatus={indexerStatus}
               />
             )}
             {tab === 'participants' && (

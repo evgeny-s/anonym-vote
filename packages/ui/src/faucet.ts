@@ -87,6 +87,47 @@ export function getProposal(): Promise<Proposal> {
   return proposalPromise;
 }
 
+export interface IndexedRemark {
+  blockNumber: number;
+  blockHash: string;
+  signer: string;
+  text: string;
+}
+
+export interface IndexerSnapshot {
+  status: 'indexing' | 'ready';
+  startBlock: number;
+  scannedThrough: number;
+  headBlock: number;
+  remarks: IndexedRemark[];
+}
+
+/**
+ * Fetch the current indexer snapshot from the backend.
+ *
+ * The backend pre-fetches blocks from `proposal.startBlock` to head and
+ * keeps them in memory; this call is just an in-memory read on the API
+ * side, so it's cheap to poll.
+ */
+export async function getIndexedVotes(): Promise<IndexerSnapshot> {
+  const res = await fetch(faucetUrl('/faucet/votes'));
+  if (!res.ok) {
+    throw new Error(`Faucet /votes error ${res.status}: ${res.statusText}`);
+  }
+  const body = (await res.json()) as Partial<IndexerSnapshot>;
+  if (
+    !body ||
+    (body.status !== 'indexing' && body.status !== 'ready') ||
+    typeof body.startBlock !== 'number' ||
+    typeof body.scannedThrough !== 'number' ||
+    typeof body.headBlock !== 'number' ||
+    !Array.isArray(body.remarks)
+  ) {
+    throw new Error('Faucet /votes returned a malformed snapshot');
+  }
+  return body as IndexerSnapshot;
+}
+
 let votersPromise: Promise<string[]> | null = null;
 
 export function getVoters(): Promise<string[]> {
