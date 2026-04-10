@@ -48,7 +48,7 @@ export default function App() {
         <div className="topbar-left">
           <div className="logo">
             <span className="logo-mark">◈</span>
-            <span className="logo-text">AnonVote</span>
+            <span className="logo-text">SubVoter</span>
           </div>
           <span className="proposal-chip">{proposal?.id ?? '…'}</span>
           <button
@@ -179,6 +179,22 @@ export default function App() {
           </>
         )}
       </main>
+
+      <footer className="footer">
+        <div className="footer-inner">
+          <span className="footer-meta">
+            Powered by{' '}
+            <a
+              href="https://tao.com"
+              target="_blank"
+              rel="noreferrer"
+              className="footer-link"
+            >
+              tao.com
+            </a>
+          </span>
+        </div>
+      </footer>
 
       <HowItWorksModal
         open={howItWorksOpen}

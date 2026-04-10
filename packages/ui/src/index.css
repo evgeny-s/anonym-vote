@@ -1159,6 +1159,48 @@ body {
   line-height: 1.6;
 }
 
+/* Footer */
+.footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(
+    180deg,
+    rgba(124, 110, 245, 0.04) 0%,
+    var(--bg2) 100%
+  );
+}
+.footer-inner {
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.footer-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text3);
+}
+.footer-link {
+  color: var(--accent2);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(167, 159, 255, 0.4);
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.footer-link:hover {
+  color: var(--text);
+  border-bottom-color: var(--accent2);
+}
+@media (max-width: 540px) {
+  .footer-inner {
+    padding: 14px 16px;
+  }
+}
+
 /* Indexer status banner */
 .res-indexing {
   background: var(--bg2);

@@ -1,4 +1,4 @@
-# AnonVote
+# SubVoter
 
 Anonymous, verifiable voting for a fixed set of eligible Polkadot accounts.
 Votes are published as `system.remark` extrinsics on a Subtensor (Bittensor)
