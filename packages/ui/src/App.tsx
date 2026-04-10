@@ -6,6 +6,7 @@ import { useProposal } from './hooks/useProposal';
 import VoteScreen from './components/VoteScreen';
 import ResultsScreen from './components/ResultsScreen';
 import ParticipantsScreen from './components/ParticipantsScreen';
+import HowItWorksModal from './components/HowItWorksModal';
 
 const TABS = [
   { id: 'vote', label: 'Vote' },
@@ -20,6 +21,7 @@ function shortAddr(addr) {
 
 export default function App() {
   const [tab, setTab] = useState('vote');
+  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
   const { voters, loading: votersLoading, error: votersError } = useVoters();
   const {
     proposal,
@@ -46,6 +48,14 @@ export default function App() {
             <span className="logo-text">AnonVote</span>
           </div>
           <span className="proposal-chip">{proposal?.id ?? '…'}</span>
+          <button
+            className="hiw-trigger"
+            onClick={() => setHowItWorksOpen(true)}
+            aria-label="How it works"
+            title="How anonymous voting works"
+          >
+            ?
+          </button>
           {isPastDeadline && (
             <span
               className="proposal-chip"
@@ -163,6 +173,11 @@ export default function App() {
           </>
         )}
       </main>
+
+      <HowItWorksModal
+        open={howItWorksOpen}
+        onClose={() => setHowItWorksOpen(false)}
+      />
     </div>
   );
 }

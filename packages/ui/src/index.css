@@ -1158,3 +1158,222 @@ body {
   color: var(--text3);
   line-height: 1.6;
 }
+
+/* How-it-works trigger + modal */
+.hiw-trigger {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+.hiw-trigger:hover {
+  color: var(--accent2);
+  border-color: var(--accent);
+  background: rgba(124, 110, 245, 0.12);
+}
+.hiw-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 12, 0.72);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+  animation: hiw-fade 0.15s ease-out;
+}
+@keyframes hiw-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.hiw-modal {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r-lg);
+  max-width: 640px;
+  width: 100%;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  animation: hiw-pop 0.18s ease-out;
+}
+@keyframes hiw-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.hiw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.hiw-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.hiw-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+.hiw-close:hover {
+  color: var(--no);
+  border-color: var(--no);
+}
+.hiw-body {
+  padding: 20px 22px 24px;
+  overflow-y: auto;
+}
+.hiw-lead {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.7;
+  margin-bottom: 20px;
+}
+.hiw-lead em {
+  color: var(--accent2);
+  font-style: normal;
+  font-weight: 600;
+}
+.hiw-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.hiw-steps > li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.hiw-step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(124, 110, 245, 0.15);
+  border: 1px solid rgba(124, 110, 245, 0.3);
+  color: var(--accent2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hiw-steps strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.hiw-steps p {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.65;
+  margin: 0;
+}
+.hiw-steps p + p {
+  margin-top: 6px;
+}
+.hiw-steps em {
+  color: var(--accent2);
+  font-style: normal;
+}
+.hiw-steps code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent2);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  word-break: break-all;
+}
+.hiw-sublist {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hiw-sublist li {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+.hiw-caveat {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.65;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}
+.hiw-caveat strong {
+  color: var(--abs);
+}
+.hiw-caveat code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent2);
+}
+@media (max-width: 540px) {
+  .hiw-backdrop {
+    padding: 12px;
+  }
+  .hiw-body {
+    padding: 16px 18px 20px;
+  }
+  .hiw-header {
+    padding: 14px 18px;
+  }
+  .hiw-title {
+    font-size: 15px;
+  }
+}
