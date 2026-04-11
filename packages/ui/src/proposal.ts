@@ -52,25 +52,15 @@ export interface ProposalConfig {
 
 export const PROPOSAL: ProposalConfig = {
   id: 'proposal-1',
-  title: 'Should we adopt ring-signature voting?',
-  description:
-    'Switch the voting protocol from coordinator-issued credentials ' +
-    'to BLSAG ring signatures over the announced voting keys. ' +
-    'See the project README for the full rationale.',
-  // TODO(operator): replace with the real SS58 addresses before shipping.
-  // These are whatever addresses should be able to publish an `announce`
-  // remark. Anyone not on this list is ignored by `reconstructRing`.
+  title: 'Release to Mainnet (Week of Apr 13)',
+  description: `Features to be releases: <br>
+                   1. Lock cost based Liquidity Injection on New Subnet Registration. <br>
+                   2. Auto Child hotkeys`,
   allowedVoters: [
     '5FTU22ZFWmzYWqCk5hJTyjq4W7VP3MTzJ1RB4NPec1h8sYCP',
     '5FU9u1fGX5x2XgR5FZpkawZ4dXy7oLbQj8SxHdtydzWtyMXm',
     '5H3DTzx9gQnqio9ixjxLtr7MyjzLrx5ZgRWDEsxgBELN4TJP',
   ],
-  // TODO(operator): set to the chain head block at the moment the proposal
-  // is published. Blocks before this are never scanned.
-  startBlock: 319100,
-  // TODO(operator): the SS58 address whose `system.remark("anon-vote-v2:start:<id>")`
-  // signals "voting is now open". Until this remark appears on chain,
-  // the UI shows only the Register button. The same address must be
-  // configured on the faucet side as COORDINATOR_ADDRESS.
+  startBlock: 319245,
   coordinatorAddress: '5Ff9wuYWk2r8qKutC5NKGBqEVY2rty5JXCBTXz5Tm7ndiWwQ',
 };
