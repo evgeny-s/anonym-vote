@@ -26,11 +26,6 @@ function shortHash(h: string): string {
   return h.length > 14 ? `${h.slice(0, 10)}…${h.slice(-6)}` : h;
 }
 
-function shortHex(h: string): string {
-  if (!h) return '';
-  return h.length > 14 ? `${h.slice(0, 8)}…${h.slice(-6)}` : h;
-}
-
 function Bar({
   label,
   count,
