@@ -1,7 +1,11 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { DripRequestDto } from './drip-request.dto';
 import { FaucetService } from './faucet.service';
-import type { DripResponse, FaucetInfo } from './faucet.service';
+import type {
+  DripResponse,
+  FaucetInfo,
+  HealthStatus,
+} from './faucet.service';
 
 /**
  * Public HTTP surface of the v2 faucet.
@@ -29,5 +33,16 @@ export class FaucetController {
   @Get('info')
   info(): FaucetInfo {
     return this.faucet.getInfo();
+  }
+
+  /**
+   * Uptime-monitor probe. Returns 200 + status JSON when the faucet
+   * has enough balance to cover the whole senate; returns 503 (via
+   * ServiceUnavailableException thrown inside the service) otherwise,
+   * so external monitors (UptimeRobot etc.) alert on status-code.
+   */
+  @Get('health')
+  health(): Promise<HealthStatus> {
+    return this.faucet.getHealth();
   }
 }

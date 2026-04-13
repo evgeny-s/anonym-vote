@@ -22,6 +22,16 @@ export interface DripResponse {
   gasAddress: string;
 }
 
+export interface HealthStatus {
+  ok: boolean;
+  faucetAddress: string;
+  balanceRao: string;
+  requiredRao: string;
+  senateSize: number;
+  fundAmountRao: string;
+  reason?: string;
+}
+
 export interface FaucetInfo {
   faucetAddress: string;
   proposalId: string;
@@ -183,6 +193,60 @@ export class FaucetService {
       );
       throw new ServiceUnavailableException('Transfer failed; try again.');
     }
+  }
+
+  /**
+   * Liveness + solvency probe for an external uptime monitor.
+   *
+   * "Healthy" means the faucet has enough free balance to cover a drip
+   * for every senator (`fundAmountRao * SENATE_SIZE`). We deliberately
+   * compare against the full senate — not the remaining undripped
+   * count — so that a monitor starts alerting the moment the cushion
+   * is gone, even if the current proposal still happens to fit.
+   *
+   * Throws `ServiceUnavailableException` (HTTP 503) when unhealthy so
+   * uptime monitors trigger on status-code alone.
+   */
+  async getHealth(): Promise<HealthStatus> {
+    const faucetAddress = this.subtensor.getFaucetAddress();
+    const requiredRao =
+      this.config.fundAmountRao * BigInt(this.config.allowedVoters.length);
+
+    let balanceRao: bigint;
+    try {
+      balanceRao = await this.subtensor.getFreeBalance(faucetAddress);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new ServiceUnavailableException({
+        ok: false,
+        faucetAddress,
+        balanceRao: '0',
+        requiredRao: requiredRao.toString(),
+        senateSize: this.config.allowedVoters.length,
+        fundAmountRao: this.config.fundAmountRao.toString(),
+        reason: `Failed to query faucet balance: ${msg}`,
+      } satisfies HealthStatus);
+    }
+
+    const status: HealthStatus = {
+      ok: balanceRao >= requiredRao,
+      faucetAddress,
+      balanceRao: balanceRao.toString(),
+      requiredRao: requiredRao.toString(),
+      senateSize: this.config.allowedVoters.length,
+      fundAmountRao: this.config.fundAmountRao.toString(),
+    };
+
+    if (!status.ok) {
+      throw new ServiceUnavailableException({
+        ...status,
+        reason:
+          `Faucet balance ${balanceRao} rao is below required ` +
+          `${requiredRao} rao (${this.config.fundAmountRao} × ${this.config.allowedVoters.length}).`,
+      } satisfies HealthStatus);
+    }
+
+    return status;
   }
 
   getInfo(): FaucetInfo {
