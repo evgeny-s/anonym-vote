@@ -21,7 +21,7 @@ export const DEFAULT_SUBTENSOR_WS =
 
 export const EXPECTED_GENESIS_HASH = (
   (import.meta.env.VITE_EXPECTED_GENESIS_HASH as string | undefined) ??
-  '0x077899043eb684c5277b6814a39161f4ce072b45e782e12c81a521c63fb4f3e5'
+  '0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03'
 ).toLowerCase();
 
 export function getSubtensorWs(): string {
