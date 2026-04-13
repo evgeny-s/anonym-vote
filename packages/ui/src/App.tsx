@@ -14,7 +14,7 @@
  * reads of the indexer snapshot and make sense at any time.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWallet } from './hooks/useWallet';
 import { useIndexer } from './hooks/useIndexer';
 import { useRing } from './hooks/useRing';
@@ -44,6 +44,16 @@ function shortAddr(addr?: string | null): string {
 export default function App() {
   const [tab, setTab] = useState<TabId>('action');
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   const wallet = useWallet([...PROPOSAL.allowedVoters]);
   const indexer = useIndexer(PROPOSAL);
@@ -93,6 +103,16 @@ export default function App() {
           </button>
         </div>
         <div className="topbar-right">
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            aria-label={
+              theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
+            }
+            title={theme === 'dark' ? 'Light theme' : 'Dark theme'}
+          >
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
           {wallet.status === 'connected' ? (
             <div className="wallet-connected">
               <span

@@ -27,6 +27,20 @@
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 16px;
+  /* bind the inline SVG logo ".com" fill to text color */
+  --token-678fcbe5-8dc2-415c-897d-7b51f0138f8e: var(--text);
+}
+
+[data-theme='light'] {
+  --bg: #f7f8fb;
+  --bg2: #ffffff;
+  --bg3: #eef1f7;
+  --border: #e1e5ee;
+  --border2: #ccd2e0;
+  --text: #1a1d26;
+  --text2: #5a6378;
+  --text3: #8891a8;
+  --accent2: #7a6eff;
 }
 
 html,
@@ -80,7 +94,7 @@ body {
   align-items: center;
   gap: 6px;
   line-height: 1;
-  background: white;
+  background: var(--bg3);
   padding: 5px;
   border-radius: 5px;
   border: 1px solid var(--text3, #9ca3af);
@@ -105,6 +119,27 @@ body {
   letter-spacing: -0.03em;
   color: var(--accent);
   line-height: 1;
+}
+.theme-toggle {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg3);
+  color: var(--text2);
+  border: 1px solid var(--border2);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.theme-toggle:hover {
+  background: var(--bg);
+  color: var(--text);
 }
 .proposal-chip {
   min-width: fit-content;
