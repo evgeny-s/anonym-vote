@@ -1,11 +1,7 @@
 import { Body, Controller, Get, Post } from '@nestjs/common';
 import { DripRequestDto } from './drip-request.dto';
 import { FaucetService } from './faucet.service';
-import type {
-  DripResponse,
-  FaucetInfo,
-  HealthStatus,
-} from './faucet.service';
+import type { DripResponse, FaucetInfo, HealthStatus } from './faucet.service';
 
 /**
  * Public HTTP surface of the v2 faucet.
