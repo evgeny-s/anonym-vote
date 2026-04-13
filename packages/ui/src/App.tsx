@@ -107,7 +107,9 @@ export default function App() {
             className="theme-toggle"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             aria-label={
-              theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'
+              theme === 'dark'
+                ? 'Switch to light theme'
+                : 'Switch to dark theme'
             }
             title={theme === 'dark' ? 'Light theme' : 'Dark theme'}
           >
@@ -228,7 +230,7 @@ export default function App() {
           </span>
           <span className="footer-meta">
             <a
-              href="https://taovote.betteruptime.com/"
+              href="https://status-vote.tao.com/"
               target="_blank"
               rel="noreferrer"
               className="footer-link"
