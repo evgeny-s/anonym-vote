@@ -174,8 +174,8 @@ export default function App() {
 
       {rpcHealth.status === 'mismatch' && (
         <div className="wallet-error">
-          ⚠ Wrong chain — the configured RPC reports a genesis hash that
-          doesn't match this build. Expected{' '}
+          ⚠ Wrong chain — the configured RPC reports a genesis hash that doesn't
+          match this build. Expected{' '}
           <code>{rpcHealth.expectedGenesis.slice(0, 14)}…</code>, got{' '}
           <code>{rpcHealth.actualGenesis?.slice(0, 14) ?? '—'}…</code>.{' '}
           <button

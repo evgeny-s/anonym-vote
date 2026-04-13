@@ -140,9 +140,9 @@ export default function RpcSettingsModal({ open, onClose, health }: Props) {
 
           {health.status === 'mismatch' && (
             <div className="rpc-warn">
-              The RPC you're connected to is a different chain from the one
-              this build targets. Data shown may be wrong or entirely missing.
-              Switch to an endpoint for the correct network below.
+              The RPC you're connected to is a different chain from the one this
+              build targets. Data shown may be wrong or entirely missing. Switch
+              to an endpoint for the correct network below.
             </div>
           )}
           {health.status === 'error' && health.error && (
@@ -163,15 +163,12 @@ export default function RpcSettingsModal({ open, onClose, health }: Props) {
             />
           </label>
           <p className="rpc-hint">
-            Leave empty to use the default (
-            <code>{DEFAULT_SUBTENSOR_WS}</code>). Endpoint is validated
-            against the expected genesis before saving; the page reloads
-            only on success.
+            Leave empty to use the default (<code>{DEFAULT_SUBTENSOR_WS}</code>
+            ). Endpoint is validated against the expected genesis before saving;
+            the page reloads only on success.
           </p>
 
-          {validationError && (
-            <div className="rpc-warn">{validationError}</div>
-          )}
+          {validationError && <div className="rpc-warn">{validationError}</div>}
 
           <div className="rpc-actions">
             <button

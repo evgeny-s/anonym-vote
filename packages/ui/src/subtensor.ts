@@ -50,7 +50,10 @@ export async function validateWs(
     await Promise.race([
       provider.connect(),
       new Promise<never>((_, rej) =>
-        setTimeout(() => rej(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs),
+        setTimeout(
+          () => rej(new Error(`timeout after ${timeoutMs}ms`)),
+          timeoutMs,
+        ),
       ),
     ]);
     api = await ApiPromise.create({ provider });
