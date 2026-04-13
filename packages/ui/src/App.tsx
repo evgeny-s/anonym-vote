@@ -167,7 +167,6 @@ export default function App() {
           <ParticipantsScreen
             voters={[...PROPOSAL.allowedVoters]}
             totalVoted={tally.totalVoted}
-            loading={indexer.status === 'indexing'}
           />
         )}
 

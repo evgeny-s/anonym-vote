@@ -5,23 +5,12 @@ function shortAddr(addr: string) {
 interface Props {
   voters: string[];
   totalVoted: number;
-  loading: boolean;
 }
 
-export default function ParticipantsScreen({
-  voters,
-  totalVoted,
-  loading,
-}: Props) {
-  if (loading) {
-    return (
-      <div className="vs-status">
-        <div className="vs-spinner" />
-        <p>Loading participants…</p>
-      </div>
-    );
-  }
-
+// The voter list is static (comes from PROPOSAL.allowedVoters) so we
+// render it immediately — no loader. `totalVoted` starts at 0 and
+// increments as the live indexer observes votes.
+export default function ParticipantsScreen({ voters, totalVoted }: Props) {
   return (
     <div className="part-root">
       <div className="part-summary">
