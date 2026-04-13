@@ -97,49 +97,8 @@ export default function ResultsScreen({
     outcome = 'Tied';
   }
 
-  const scanProgressPct =
-    indexer.head !== null && indexer.head > config.startBlock
-      ? Math.min(
-          100,
-          Math.round(
-            ((indexer.scannedThrough - config.startBlock + 1) /
-              (indexer.head - config.startBlock + 1)) *
-              100,
-          ),
-        )
-      : 0;
-
   return (
     <div className="res-root">
-      {indexer.status === 'indexing' && (
-        <div className="res-indexing">
-          <div className="res-indexing-row">
-            <div className="vs-spinner" style={{ width: 18, height: 18 }} />
-            <div>
-              <strong>Scanning chain…</strong>
-              <p>
-                {indexer.remarks.length > 0
-                  ? `${indexer.remarks.length} remark(s) seen so far — the tally updates live as new blocks land.`
-                  : 'No remarks seen yet — the tally will fill in as blocks are processed.'}
-              </p>
-            </div>
-            <span className="res-indexing-pct">{scanProgressPct}%</span>
-          </div>
-          <div className="res-progress-track">
-            <div
-              className="res-progress-fill"
-              style={{ width: `${scanProgressPct}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {indexer.error && (
-        <div className="vs-error">
-          <p>Indexer error: {indexer.error}</p>
-        </div>
-      )}
-
       <div className="res-metrics">
         <div className="res-metric">
           <div className="res-metric-label">Voted</div>

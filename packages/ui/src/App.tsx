@@ -26,6 +26,7 @@ import ResultsScreen from './components/ResultsScreen';
 import ParticipantsScreen from './components/ParticipantsScreen';
 import CoordinatorScreen from './components/CoordinatorScreen';
 import HowItWorksModal from './components/HowItWorksModal';
+import IndexerStatus from './components/IndexerStatus';
 
 const TABS = [
   { id: 'action', label: 'Vote' },
@@ -142,6 +143,8 @@ export default function App() {
       </nav>
 
       <main className="content">
+        <IndexerStatus indexer={indexer} config={PROPOSAL} />
+
         {tab === 'action' && (
           <VoteScreen
             wallet={wallet}
@@ -186,6 +189,16 @@ export default function App() {
               className="footer-link"
             >
               tao.com
+            </a>
+          </span>
+          <span className="footer-meta">
+            <a
+              href="https://taovote.betteruptime.com/"
+              target="_blank"
+              rel="noreferrer"
+              className="footer-link"
+            >
+              status
             </a>
           </span>
         </div>

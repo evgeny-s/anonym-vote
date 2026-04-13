@@ -1186,6 +1186,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 50px;
+  flex-wrap: wrap;
 }
 .footer-meta {
   font-family: var(--font-mono);
@@ -1219,6 +1221,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin-bottom: 18px;
 }
 .res-indexing-row {
   display: flex;
