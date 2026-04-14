@@ -3,7 +3,7 @@
  * anon-vote CLI — auditor + voter tooling.
  */
 
-import { Command, Option } from 'commander';
+import { Command } from 'commander';
 import { runVerify } from './commands/verify';
 import { runAnnounce } from './commands/announce';
 import { runVote } from './commands/vote';
@@ -47,11 +47,18 @@ function walletSource(opts: {
   };
 }
 
-/** Shared `--key-dir` option. */
-const keyDirOption = new Option(
-  '--key-dir <path>',
-  'Directory for per-voter secrets (voting keys, gas mnemonics)',
-).default(defaultKeyDir());
+/** Shared `--key-dir <path>` option applied to a command. */
+function addKeyDirFlag(cmd: Command): Command {
+  return cmd.option(
+    '--key-dir <path>',
+    'Directory for per-voter secrets (voting keys, gas mnemonics)',
+    defaultKeyDir(),
+  );
+}
+
+/** CSV parser used by --allowed. Typed explicitly so strict TS is happy. */
+const parseCsv = (v: string): string[] =>
+  v.split(',').map((s) => s.trim()).filter(Boolean);
 
 // ─── verify ────────────────────────────────────────────────────────────────
 
@@ -77,7 +84,7 @@ program
   .option(
     '--allowed <csv>',
     'Override allowlist (default: from /faucet/info)',
-    (v) => v.split(',').map((s) => s.trim()).filter(Boolean),
+    parseCsv,
   )
   .option(
     '--coordinator <addr>',
@@ -105,17 +112,18 @@ program
 // ─── announce ──────────────────────────────────────────────────────────────
 
 addWalletFlags(
-  program
-    .command('announce')
-    .description(
-      'Generate (or re-use) a voting key for your wallet and publish ' +
-        'the announce remark. Run this once per proposal per real ' +
-        'wallet, before voting opens.',
-    )
-    .requiredOption('--ws <url>', 'Subtensor WS endpoint')
-    .requiredOption('--expected-genesis <hex>', 'Pinned genesis hash')
-    .requiredOption('--proposal <id>', 'Proposal id')
-    .addOption(keyDirOption),
+  addKeyDirFlag(
+    program
+      .command('announce')
+      .description(
+        'Generate (or re-use) a voting key for your wallet and publish ' +
+          'the announce remark. Run this once per proposal per real ' +
+          'wallet, before voting opens.',
+      )
+      .requiredOption('--ws <url>', 'Subtensor WS endpoint')
+      .requiredOption('--expected-genesis <hex>', 'Pinned genesis hash')
+      .requiredOption('--proposal <id>', 'Proposal id'),
+  ),
 ).action(async (opts) => {
   const code = await runAnnounce({
     ws: opts.ws,
@@ -130,8 +138,7 @@ addWalletFlags(
 // ─── vote ──────────────────────────────────────────────────────────────────
 
 addWalletFlags(
-  program
-    .command('vote')
+  addKeyDirFlag(program.command('vote'))
     .description(
       'Cast a vote: ring-sign a drip request, wait for gas funds from ' +
         'the faucet, then ring-sign and publish the vote remark via ' +
@@ -162,15 +169,14 @@ addWalletFlags(
     .option(
       '--allowed <csv>',
       'Override allowlist (default: from /faucet/info)',
-      (v) => v.split(',').map((s) => s.trim()).filter(Boolean),
+      parseCsv,
     )
     .option(
       '--gas-timeout <ms>',
       'How long to wait for gas wallet to be funded',
       (v) => Number.parseInt(v, 10),
       180_000,
-    )
-    .addOption(keyDirOption),
+    ),
 ).action(async (opts) => {
   const code = await runVote({
     ws: opts.ws,
