@@ -48,15 +48,18 @@ export async function connect(
 
 /**
  * Scan [fromBlock..toBlock] inclusive and return every signed
- * `system.remark` whose signer is in `signerFilter`. `signerFilter` is
- * the union of allowlisted voters and the coordinator — we don't need
- * anything else to reconstruct the tally.
+ * `system.remark` in the range, unfiltered. Downstream consumers
+ * (`tallyRemarks`, `reconstructRing`) use the shared parsers to
+ * recognize their own remark shapes and ignore everything else —
+ * same pattern as the UI indexer. No signer or prefix filter here
+ * because votes are submitted by one-shot gas wallets outside the
+ * allowlist (that's the anonymity property) and are raw-JSON, not
+ * prefixed like announces are.
  */
 export async function scanRemarks(
   api: ApiPromise,
   fromBlock: number,
   toBlock: number,
-  signerFilter: ReadonlySet<string>,
   opts: ScanOptions = {},
 ): Promise<RemarkLike[]> {
   if (fromBlock > toBlock) return [];
@@ -78,8 +81,6 @@ export async function scanRemarks(
           if (!ex.isSigned) continue;
           const { section, method } = ex.method;
           if (section !== 'system' || method !== 'remark') continue;
-          const signer = ex.signer.toString();
-          if (!signerFilter.has(signer)) continue;
           let text: string;
           try {
             const arg = ex.method.args[0] as unknown as {
@@ -89,6 +90,7 @@ export async function scanRemarks(
           } catch {
             continue;
           }
+          const signer = ex.signer.toString();
           remarks.push({ blockNumber: n, signer, text });
         }
       } catch (err) {

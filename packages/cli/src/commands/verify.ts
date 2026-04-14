@@ -66,11 +66,6 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
       );
     }
 
-    const signerFilter = new Set<string>([
-      ...args.allowed,
-      args.coordinator,
-    ]);
-
     const span = toBlock - args.startBlock + 1;
     process.stderr.write(
       `Scanning blocks [${args.startBlock}..${toBlock}] (${span.toLocaleString()} blocks, head=${chain.head})…\n`,
@@ -87,7 +82,6 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
       chain.api,
       args.startBlock,
       toBlock,
-      signerFilter,
       {
         concurrency: args.concurrency,
         onProgress: (done, total, matched) => {
