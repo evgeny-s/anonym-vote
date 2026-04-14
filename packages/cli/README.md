@@ -16,14 +16,27 @@ and refuse to run if the RPC reports a different genesis hash.
 
 ## Build
 
+From the repo root:
+
 ```sh
-# repo root
-npm run wasm:build      # Rust → WASM (pkg/ is gitignored)
-npm run shared:build    # shared types/functions
-npm run cli:build       # TypeScript → dist/
+npm run build
 ```
 
-Or the aggregate: `npm run build`.
+That runs every step in order: `wasm:build` (Rust→WASM via wasm-pack,
+required because `packages/ring-sig/wasm/pkg/` is gitignored),
+`shared:build`, `api:build`, `ui:build`, `cli:build`.
+
+If you only need the CLI and already have the wasm artifacts:
+
+```sh
+npm run wasm:build   # skip if packages/ring-sig/wasm/pkg/*.wasm exists
+npm run shared:build
+npm run cli:build
+```
+
+First run needs Rust + wasm-pack installed; the `wasm:build` step
+installs them via `scripts/heroku-prebuild.sh` if missing (~1 min
+cached, 3-5 min cold).
 
 ## verify
 
