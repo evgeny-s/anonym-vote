@@ -32,7 +32,10 @@ export default function ParticipantsScreen({ voters, totalVoted }: Props) {
       (i) => i.name !== null || i.coldkey !== null,
     );
   const emptyResult =
-    !identities.loading && !identities.error && voters.length > 0 && !anyResolved;
+    !identities.loading &&
+    !identities.error &&
+    voters.length > 0 &&
+    !anyResolved;
 
   return (
     <div className="part-root">
@@ -81,9 +84,9 @@ export default function ParticipantsScreen({ voters, totalVoted }: Props) {
       {emptyResult && (
         <div className="part-hint">
           None of these addresses have on-chain identity data on the configured
-          RPC. Hotkeys that aren't registered as Subtensor validators don't
-          have a coldkey mapping or an <code>identitiesV2</code> record, so
-          the UI shows "unknown" — the voting flow itself is unaffected.
+          RPC. Hotkeys that aren't registered as Subtensor validators don't have
+          a coldkey mapping or an <code>identitiesV2</code> record, so the UI
+          shows "unknown" — the voting flow itself is unaffected.
         </div>
       )}
 

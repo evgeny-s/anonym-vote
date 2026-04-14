@@ -86,7 +86,11 @@ function extractName(raw: unknown): string | null {
   if (!inner || typeof inner !== 'object') return null;
 
   const nameField = (inner as { name?: unknown }).name as
-    | { toHuman?: () => unknown; toString?: () => string; toU8a?: () => Uint8Array }
+    | {
+        toHuman?: () => unknown;
+        toString?: () => string;
+        toU8a?: () => Uint8Array;
+      }
     | undefined;
   if (!nameField) return null;
 
