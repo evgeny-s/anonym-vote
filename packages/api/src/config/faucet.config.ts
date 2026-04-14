@@ -37,6 +37,26 @@ export class FaucetConfig implements OnModuleInit {
   readonly fundAmountRao: bigint;
   readonly port: number;
   readonly corsOrigins: string[];
+  /**
+   * Rate-limit buckets. The global default covers cheap reads
+   * (/faucet/info, /faucet/health). The `drip` bucket is tighter:
+   * one honest voter makes at most one drip per proposal, and each
+   * request drives a WASM ring-sig verification + ring reconstruction,
+   * so we throttle aggressively to stop anyone from turning the
+   * endpoint into a CPU-burn primitive.
+   */
+  readonly throttleDefaultLimit: number;
+  readonly throttleDefaultTtlMs: number;
+  readonly throttleDripLimit: number;
+  readonly throttleDripTtlMs: number;
+  /**
+   * Whether Nest should trust the `X-Forwarded-For` header to
+   * determine the client IP. Required on Heroku / any reverse-proxy
+   * deployment, otherwise every request appears to come from the
+   * proxy and rate-limiting degenerates to "global throttle across
+   * all clients". Default true because dev-on-localhost is unaffected.
+   */
+  readonly trustProxy: boolean;
 
   get proposalId(): string {
     return this.proposal.id;
@@ -85,6 +105,12 @@ export class FaucetConfig implements OnModuleInit {
       .split(',')
       .map((o) => o.trim())
       .filter(Boolean);
+
+    this.throttleDefaultLimit = intFromEnv('THROTTLE_DEFAULT_LIMIT', 60);
+    this.throttleDefaultTtlMs = intFromEnv('THROTTLE_DEFAULT_TTL_MS', 60_000);
+    this.throttleDripLimit = intFromEnv('THROTTLE_DRIP_LIMIT', 5);
+    this.throttleDripTtlMs = intFromEnv('THROTTLE_DRIP_TTL_MS', 60_000);
+    this.trustProxy = (process.env.TRUST_PROXY ?? 'true') !== 'false';
   }
 
   onModuleInit() {
@@ -93,6 +119,13 @@ export class FaucetConfig implements OnModuleInit {
     this.logger.log(`Start block:              ${this.proposal.startBlock}`);
     this.logger.log(`Allowed voters:           ${this.allowedVoters.length}`);
     this.logger.log(`Coordinator address:      ${this.coordinatorAddress}`);
+    this.logger.log(
+      `Throttle default:         ${this.throttleDefaultLimit} / ${this.throttleDefaultTtlMs}ms`,
+    );
+    this.logger.log(
+      `Throttle drip:            ${this.throttleDripLimit} / ${this.throttleDripTtlMs}ms`,
+    );
+    this.logger.log(`Trust proxy:              ${this.trustProxy}`);
     this.logger.log(`Fund amount:              ${this.fundAmountRao} rao`);
     this.logger.log(`CORS origins:             ${this.corsOrigins.join(', ')}`);
   }
@@ -104,4 +137,14 @@ function required(name: string): string {
     throw new Error(`Required env var ${name} is not set`);
   }
   return v;
+}
+
+function intFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw || !raw.trim()) return fallback;
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new Error(`${name} must be a non-negative integer, got ${raw}`);
+  }
+  return n;
 }
