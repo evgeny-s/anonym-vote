@@ -7,10 +7,13 @@
 #   docker compose run --rm announce
 #
 # Vote (cast a ring-signed vote):
-#   CHOICE=yes docker compose run --rm vote
+#   CHOICE=yes  docker compose run --rm vote
+#   CHOICE=no   docker compose run --rm vote
 #
 # Override defaults via env vars:
 #   WS_URL=wss://other-rpc PROPOSAL_ID=proposal-2 docker compose run --rm verify
+#
+# CHOICE is required for the vote service (no default — prevents accidental votes).
 
 x-common: &common
   build:
@@ -98,7 +101,7 @@ services:
       - --faucet-url
       - ${FAUCET_URL:-https://api-vote.tao.com}
       - --choice
-      - ${CHOICE:-yes}
+      - ${CHOICE:?CHOICE is required (yes, no, or abstain)}
       - --json-file
       - /wallet
       - --key-dir
