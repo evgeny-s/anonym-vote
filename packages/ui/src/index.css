@@ -1153,8 +1153,54 @@ body {
   color: var(--yes);
   background: rgba(34, 197, 94, 0.05);
 }
+.part-pill.registered {
+  border-color: rgba(86, 12, 245, 0.3);
+  color: var(--accent2);
+  background: rgba(86, 12, 245, 0.05);
+}
 .part-pill.pending {
   color: var(--text3);
+}
+/* Per-row registration status badge */
+.part-status {
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+.part-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.part-status-badge.registered {
+  border-color: rgba(86, 12, 245, 0.3);
+  color: var(--accent2);
+  background: rgba(86, 12, 245, 0.06);
+}
+.part-status-badge.registered:hover {
+  background: rgba(86, 12, 245, 0.12);
+  border-color: rgba(86, 12, 245, 0.5);
+}
+.part-status-badge.not-registered {
+  background: transparent;
+}
+.part-status-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+.part-status-block {
+  font-size: 10px;
+  opacity: 0.8;
 }
 .part-list {
   background: var(--bg2);

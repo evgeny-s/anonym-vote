@@ -19,12 +19,16 @@
  */
 
 import { useMemo } from 'react';
-import {
-  parseAnnounceRemark,
-  reconstructRing,
-  type RemarkLike,
-} from '@anon-vote/shared';
+import { parseAnnounceRemark, reconstructRing } from '@anon-vote/shared';
+import type { IndexedRemark } from '../indexer';
 import type { ProposalConfig } from '../proposal';
+
+export interface AnnounceMeta {
+  /** Block number of the earliest announce we've seen for this voter. */
+  blockNumber: number;
+  /** Block hash for deep-linking to a chain explorer. */
+  blockHash: string;
+}
 
 export interface RingState {
   /**
@@ -46,10 +50,18 @@ export interface RingState {
   myAnnounceBlock: number | null;
   /** Count of distinct real voters that have announced. */
   announcedVoterCount: number;
+  /**
+   * Earliest announce seen per allowlisted signer, keyed by SS58.
+   * Used by the Participants screen to show a "Registered at block X"
+   * status + explorer deep-link per voter. Voters without an entry
+   * have not been observed announcing yet (or the indexer hasn't
+   * caught up to their announce).
+   */
+  announcedAt: Map<string, AnnounceMeta>;
 }
 
 export function useRing(
-  remarks: readonly RemarkLike[],
+  remarks: readonly IndexedRemark[],
   config: ProposalConfig,
   realAddress: string | null,
 ): RingState {
@@ -63,13 +75,24 @@ export function useRing(
 
     let myAnnouncedVk: string | null = null;
     let myAnnounceBlock: number | null = null;
-    const voterSeen = new Set<string>();
+    // Earliest announce per allowlisted signer. We track the lowest
+    // block number and its hash so the Participants screen can deep-
+    // link to the exact on-chain registration.
+    const announcedAt = new Map<string, AnnounceMeta>();
 
     for (const r of remarks) {
       if (!allowedSet.has(r.signer)) continue;
       const parsed = parseAnnounceRemark(r.text);
       if (!parsed || parsed.proposalId !== config.id) continue;
-      voterSeen.add(r.signer);
+
+      const existing = announcedAt.get(r.signer);
+      if (!existing || r.blockNumber < existing.blockNumber) {
+        announcedAt.set(r.signer, {
+          blockNumber: r.blockNumber,
+          blockHash: r.blockHash,
+        });
+      }
+
       if (
         realAddress &&
         r.signer === realAddress &&
@@ -84,7 +107,8 @@ export function useRing(
       ring,
       myAnnouncedVk,
       myAnnounceBlock,
-      announcedVoterCount: voterSeen.size,
+      announcedVoterCount: announcedAt.size,
+      announcedAt,
     };
   }, [remarks, config.id, config.allowedVoters, realAddress]);
 }
