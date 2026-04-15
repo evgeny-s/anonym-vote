@@ -7,7 +7,7 @@ to count the result, but **no observer — including the faucet
 operator — can link a published vote back to the real voter who cast
 it**.
 
-This repository is a monorepo of four workspace packages:
+This repository is a monorepo of five workspace packages:
 
 | Package              | Stack                     | Purpose                                                                |
 | -------------------- | ------------------------- | ---------------------------------------------------------------------- |
@@ -15,6 +15,7 @@ This repository is a monorepo of four workspace packages:
 | `packages/ring-sig`  | Rust + wasm-pack          | Vendored BLSAG ring signatures over Ristretto255; CLI + WASM targets.  |
 | `packages/api`       | NestJS, @polkadot/api     | Trust-minimized faucet. One endpoint: ring-sig-authenticated `/drip`.  |
 | `packages/ui`        | React + Vite              | Voter-facing app. Announces, ring-signs, publishes, scans, tallies.    |
+| `packages/cli`       | Node + commander          | Auditor / voter CLI. Independent `verify` tally plus `announce` + `vote` commands mirroring the UI. See [`packages/cli/README.md`](packages/cli/README.md). |
 
 ---
 
@@ -598,21 +599,49 @@ npm run api:dev
 npm run ui:dev
 ```
 
-### Verify off-chain
+### CLI (auditor + voter)
 
-To manually verify a vote remark without trusting the browser
-WASM build, use the CLI:
+For fully independent tallies, registering without the browser, and
+casting a vote from a Node environment, use `@anon-vote/cli`.
+
+Build once:
 
 ```
-cargo run -p ring-cli -- verify \
-  --ring    /path/to/ring.json \
-  --msg     /path/to/vote-message.bin \
-  --sig     /path/to/signature.json
+npm run build --workspace=@anon-vote/cli
 ```
 
-`ring-cli` reads the same JSON formats the UI produces, so you can
-copy-paste any on-chain vote payload straight into a verification
-command.
+Three commands:
+
+- `anon-vote verify` — scans the chain, reconstructs the ring,
+  verifies every ring signature via the same WASM crate the faucet
+  uses, and prints a deterministic `sha256:…` over the outcome. Two
+  independent runs against the same chain state produce the same
+  hash, so auditors can compare results with a single string
+  compare. Proposal metadata (allowlist, startBlock, coordinator)
+  is pulled from `/faucet/info` by default; every field is
+  overridable via flags.
+- `anon-vote announce` — generates (or re-uses) a voting key for
+  your wallet and publishes the announce remark. Wallet input
+  accepts either a BIP39 mnemonic (`--mnemonic` / `MNEMONIC` env),
+  a Polkadot-JS keystore JSON with password (`--json-file` +
+  `--password` / `JSON_PASSWORD`), or a plain SDK JSON export with
+  a `secretPhrase` field — the loader auto-detects the shape.
+- `anon-vote vote` — ring-signs a drip request, fetches gas via
+  the faucet, then publishes the ring-signed vote remark from a
+  throwaway gas wallet. Mirrors the UI flow exactly, so votes
+  cast by the CLI and by the UI are indistinguishable on chain.
+
+Keystore layout (override with `--key-dir`, default `~/.anon-vote`):
+
+```
+~/.anon-vote/
+└── <proposalId>/
+    ├── <address>.voting-key.json    # { sk, pk, createdAt }, mode 0600
+    └── <address>.gas-wallet.json    # { mnemonic, createdAt },  mode 0600
+```
+
+Full usage, examples, and exit-code semantics:
+[`packages/cli/README.md`](packages/cli/README.md).
 
 ---
 
