@@ -225,6 +225,7 @@ export default function App() {
           <ParticipantsScreen
             voters={[...PROPOSAL.allowedVoters]}
             totalVoted={tally.totalVoted}
+            announcedAt={ring.announcedAt}
           />
         )}
 
