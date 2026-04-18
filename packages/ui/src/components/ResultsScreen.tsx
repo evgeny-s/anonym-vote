@@ -11,10 +11,16 @@
  * to find the real voter.
  */
 
+import { useEffect, useState } from 'react';
 import type { ProposalConfig } from '../proposal';
 import type { IndexerSnapshot } from '../hooks/useIndexer';
 import type { RingState } from '../hooks/useRing';
-import type { AcceptedVote, InvalidVoteEntry, Tally } from '@anon-vote/shared';
+import type {
+  AcceptedClearVote,
+  AcceptedVote,
+  InvalidVoteEntry,
+  Tally,
+} from '@anon-vote/shared';
 import { SUBTENSOR_WS } from '../config';
 
 function explorerLink(blockHash: string): string {
@@ -24,6 +30,11 @@ function explorerLink(blockHash: string): string {
 function shortHash(h: string): string {
   if (!h) return '';
   return h.length > 14 ? `${h.slice(0, 10)}…${h.slice(-6)}` : h;
+}
+
+function shortAddr(a: string): string {
+  if (!a) return '';
+  return a.length > 14 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a;
 }
 
 function Bar({
@@ -58,8 +69,83 @@ export interface ResultsScreenProps {
   ring: RingState;
   tally: Tally;
   votes: AcceptedVote[];
+  clearVotes: AcceptedClearVote[];
   invalidReasons: InvalidVoteEntry[];
   config: ProposalConfig;
+}
+
+type VoteRow =
+  | { kind: 'anon'; blockNumber: number; choice: string; keyImage: string }
+  | {
+      kind: 'clear';
+      blockNumber: number;
+      choice: string;
+      realAddress: string;
+    };
+
+/**
+ * Small explainer modal reachable from the `?` button next to any
+ * PUBLIC badge. Same CSS as HowItWorksModal so the style matches
+ * without a new stylesheet entry.
+ */
+function PublicVoteInfoModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="hiw-backdrop" onClick={onClose}>
+      <div
+        className="hiw-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pv-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="hiw-header">
+          <h2 id="pv-title" className="hiw-title">
+            Why is this vote public?
+          </h2>
+          <button className="hiw-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <div className="hiw-body">
+          <p>
+            Anonymous voting relies on a <strong>voting key</strong> saved
+            locally in the voter's browser during registration. Without that
+            key the voter cannot produce a ring signature and cannot cast an
+            anonymous vote on a different device.
+          </p>
+          <p>
+            When that happens, we offer a <strong>clear-vote fallback</strong>:
+            the voter signs a plain-text <code>system.remark</code> with their
+            real wallet and explicitly confirms that their choice will be
+            visible on chain. This is the only way to include a voter who has
+            lost access to the original voting key.
+          </p>
+          <p>
+            Public votes are counted exactly like anonymous ones in the Vote
+            distribution — the only difference is that the link between the
+            real address and the choice is visible to everyone.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ResultsScreen({
@@ -67,9 +153,11 @@ export default function ResultsScreen({
   ring,
   tally,
   votes,
+  clearVotes,
   invalidReasons,
   config,
 }: ResultsScreenProps) {
+  const [publicInfoOpen, setPublicInfoOpen] = useState(false);
   const counted = tally.yes + tally.no + tally.abstain;
 
   // Map key image → block hash so the remark list can deep-link to
@@ -187,44 +275,126 @@ export default function ResultsScreen({
         </div>
       </div>
 
-      {votes.length > 0 && (
+      {(votes.length > 0 || clearVotes.length > 0) && (
         <div className="res-card">
-          <div className="res-card-title">Accepted votes ({votes.length})</div>
+          <div className="res-card-title">
+            Accepted votes ({votes.length + clearVotes.length})
+          </div>
           <p className="res-blocks-hint">
-            Each row is a ring-signed <code>system.remark</code>. The{' '}
-            <em>key image</em> is the stable per-voter identifier used for
+            Each row is a <code>system.remark</code> accepted by the tally.
+            The <em>key image</em> is the stable per-voter identifier used for
             dedup; different key images mean different voters, but nothing in
             the row reveals which allowlisted account that voter is.
           </p>
           <div className="res-blocks">
-            {votes.map((v) => {
-              const blockHash = blockHashByNumber.get(v.blockNumber) ?? '';
-              return (
-                <a
-                  key={v.sig.key_image}
-                  className="res-block-row"
-                  href={blockHash ? explorerLink(blockHash) : '#'}
-                  target="_blank"
-                  rel="noreferrer"
-                  title="Open on polkadot.js Apps"
-                >
-                  <span className="res-block-num">#{v.blockNumber}</span>
-                  <span className="res-block-hash">
-                    {blockHash ? shortHash(blockHash) : '…'}
-                  </span>
-                  <span
-                    className="res-block-signer"
-                    style={{ color: `var(--${v.c})` }}
+            {(() => {
+              const rows: VoteRow[] = [
+                ...votes.map(
+                  (v): VoteRow => ({
+                    kind: 'anon',
+                    blockNumber: v.blockNumber,
+                    choice: v.c,
+                    keyImage: v.sig.key_image,
+                  }),
+                ),
+                ...clearVotes.map(
+                  (v): VoteRow => ({
+                    kind: 'clear',
+                    blockNumber: v.blockNumber,
+                    choice: v.choice,
+                    realAddress: v.realAddress,
+                  }),
+                ),
+              ].sort((a, b) => a.blockNumber - b.blockNumber);
+
+              return rows.map((row) => {
+                const blockHash =
+                  blockHashByNumber.get(row.blockNumber) ?? '';
+                const key =
+                  row.kind === 'anon'
+                    ? `anon:${row.keyImage}`
+                    : `clear:${row.realAddress}:${row.blockNumber}`;
+                return (
+                  <a
+                    key={key}
+                    className="res-block-row"
+                    href={blockHash ? explorerLink(blockHash) : '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open on polkadot.js Apps"
                   >
-                    {v.c}
-                  </span>
-                  <span className="res-block-arrow">↗</span>
-                </a>
-              );
-            })}
+                    <span className="res-block-num">#{row.blockNumber}</span>
+                    <span className="res-block-hash">
+                      {row.kind === 'clear'
+                        ? shortAddr(row.realAddress)
+                        : blockHash
+                          ? shortHash(blockHash)
+                          : '…'}
+                    </span>
+                    <span
+                      className="res-block-signer"
+                      style={{ color: `var(--${row.choice})` }}
+                    >
+                      {row.choice}
+                      {row.kind === 'clear' && (
+                        <>
+                          <span
+                            style={{
+                              marginLeft: 8,
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                              background: 'rgba(245, 158, 11, 0.18)',
+                              color: '#b45309',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            public
+                          </span>
+                          <button
+                            type="button"
+                            aria-label="Why is this vote public?"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setPublicInfoOpen(true);
+                            }}
+                            style={{
+                              all: 'unset',
+                              cursor: 'pointer',
+                              marginLeft: 6,
+                              width: 16,
+                              height: 16,
+                              borderRadius: '50%',
+                              border: '1px solid var(--text3)',
+                              color: 'var(--text3)',
+                              fontSize: '11px',
+                              lineHeight: '14px',
+                              textAlign: 'center',
+                              fontWeight: 700,
+                              display: 'inline-block',
+                            }}
+                          >
+                            ?
+                          </button>
+                        </>
+                      )}
+                    </span>
+                    <span className="res-block-arrow">↗</span>
+                  </a>
+                );
+              });
+            })()}
           </div>
         </div>
       )}
+
+      <PublicVoteInfoModal
+        open={publicInfoOpen}
+        onClose={() => setPublicInfoOpen(false)}
+      />
     </div>
   );
 }

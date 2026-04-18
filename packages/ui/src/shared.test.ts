@@ -31,6 +31,8 @@ import {
   findVotingStartBlock,
   encodeVoteRemark,
   parseVoteRemark,
+  encodeClearVoteRemark,
+  parseClearVoteRemark,
   voteMessageHex,
   dripMessageHex,
   reconstructRing,
@@ -183,6 +185,47 @@ describe('vote remark', () => {
       sig: bad,
     });
     expect(parseVoteRemark(text)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// clear-vote remark
+// ---------------------------------------------------------------------------
+
+describe('clear-vote remark', () => {
+  it('round-trips all choices', () => {
+    for (const choice of CHOICES) {
+      const text = encodeClearVoteRemark(PROPOSAL, choice);
+      expect(text).toBe(`anon-vote-v2:clear-vote:${PROPOSAL}:${choice}`);
+      expect(parseClearVoteRemark(text)).toEqual({
+        proposalId: PROPOSAL,
+        choice,
+      });
+    }
+  });
+
+  it('rejects proposalId with colon', () => {
+    expect(() =>
+      encodeClearVoteRemark('bad:id', 'yes'),
+    ).toThrow();
+  });
+
+  it('rejects unknown choice on encode', () => {
+    // Force an invalid choice through the type boundary to guard the
+    // runtime check — a buggy call site could still hit this.
+    expect(() =>
+      encodeClearVoteRemark(PROPOSAL, 'maybe' as unknown as 'yes'),
+    ).toThrow();
+  });
+
+  it('returns null for unrelated text', () => {
+    expect(parseClearVoteRemark('hello')).toBeNull();
+    expect(parseClearVoteRemark('')).toBeNull();
+    expect(parseClearVoteRemark('anon-vote-v2:announce:foo:bar')).toBeNull();
+    expect(parseClearVoteRemark('anon-vote-v2:clear-vote:')).toBeNull();
+    expect(
+      parseClearVoteRemark(`anon-vote-v2:clear-vote:${PROPOSAL}:maybe`),
+    ).toBeNull();
   });
 });
 
@@ -728,6 +771,216 @@ describe('tallyRemarks (stub verify)', () => {
     expect(tally.totalVoted).toBe(0);
     expect(invalidReasons).toHaveLength(1);
     expect(invalidReasons[0].reason).toBe('no-start-remark');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// tallyRemarks — clear-vote fallback path
+// ---------------------------------------------------------------------------
+
+describe('tallyRemarks (clear votes)', () => {
+  // A tiny pre-start setup. Clear-vote doesn't need a ring, but we
+  // still need the coordinator's start remark or everything is
+  // invalid by the no-start rule.
+  const alice = 'aa'.repeat(32);
+  const bob = 'bb'.repeat(32);
+  const minimalSetup: RemarkLike[] = [
+    {
+      blockNumber: 1,
+      signer: '5Alice',
+      text: encodeAnnounceRemark(PROPOSAL, alice),
+    },
+    {
+      blockNumber: 2,
+      signer: '5Bob',
+      text: encodeAnnounceRemark(PROPOSAL, bob),
+    },
+    { blockNumber: 5, signer: COORDINATOR, text: encodeStartRemark(PROPOSAL) },
+  ];
+
+  function clearVote(
+    block: number,
+    signer: string,
+    choice: 'yes' | 'no' | 'abstain',
+    proposalId: string = PROPOSAL,
+  ): RemarkLike {
+    return {
+      blockNumber: block,
+      signer,
+      text: encodeClearVoteRemark(proposalId, choice),
+    };
+  }
+
+  const acceptAll: RingSigVerify = () => true;
+
+  it('counts a clear vote from an allowlisted signer', () => {
+    const { tally, clearVotes } = tallyRemarks(
+      [...minimalSetup, clearVote(10, '5Alice', 'yes')],
+      {
+        proposalId: PROPOSAL,
+        coordinatorAddress: COORDINATOR,
+        allowedRealAddresses: new Set(['5Alice', '5Bob']),
+        verify: acceptAll,
+      },
+    );
+    expect(tally).toEqual({
+      yes: 1,
+      no: 0,
+      abstain: 0,
+      invalid: 0,
+      totalVoted: 1,
+    });
+    expect(clearVotes).toHaveLength(1);
+    expect(clearVotes[0]).toEqual({
+      proposalId: PROPOSAL,
+      choice: 'yes',
+      blockNumber: 10,
+      realAddress: '5Alice',
+    });
+  });
+
+  it('rejects a clear vote from a non-allowlisted signer', () => {
+    const { tally, invalidReasons } = tallyRemarks(
+      [...minimalSetup, clearVote(10, '5Imposter', 'yes')],
+      {
+        proposalId: PROPOSAL,
+        coordinatorAddress: COORDINATOR,
+        allowedRealAddresses: new Set(['5Alice', '5Bob']),
+        verify: acceptAll,
+      },
+    );
+    expect(tally.invalid).toBe(1);
+    expect(tally.totalVoted).toBe(0);
+    expect(invalidReasons).toHaveLength(1);
+    expect(invalidReasons[0].reason).toBe('clear-vote-not-allowed');
+  });
+
+  it('rejects a clear vote from an allowlisted signer who never announced', () => {
+    // Eve is allowlisted but never published an announce remark.
+    // The public fallback is reserved for voters who DID register
+    // during the announce phase and later lost their VK — not for
+    // voters who skipped registration entirely.
+    const { tally, invalidReasons, clearVotes } = tallyRemarks(
+      [...minimalSetup, clearVote(10, '5Eve', 'yes')],
+      {
+        proposalId: PROPOSAL,
+        coordinatorAddress: COORDINATOR,
+        allowedRealAddresses: new Set(['5Alice', '5Bob', '5Eve']),
+        verify: acceptAll,
+      },
+    );
+    expect(tally.invalid).toBe(1);
+    expect(tally.totalVoted).toBe(0);
+    expect(clearVotes).toHaveLength(0);
+    expect(invalidReasons).toHaveLength(1);
+    expect(invalidReasons[0].reason).toBe('clear-vote-not-announced');
+  });
+
+  it('rejects a clear vote in a block strictly before start', () => {
+    const { tally, invalidReasons } = tallyRemarks(
+      [...minimalSetup, clearVote(3, '5Alice', 'yes')],
+      {
+        proposalId: PROPOSAL,
+        coordinatorAddress: COORDINATOR,
+        allowedRealAddresses: new Set(['5Alice']),
+        verify: acceptAll,
+      },
+    );
+    expect(tally.invalid).toBe(1);
+    expect(invalidReasons[0].reason).toBe('pre-start-vote');
+  });
+
+  it('rejects all clear votes when no start remark was observed', () => {
+    const noStart: RemarkLike[] = [
+      {
+        blockNumber: 1,
+        signer: '5Alice',
+        text: encodeAnnounceRemark(PROPOSAL, alice),
+      },
+    ];
+    const { tally, invalidReasons } = tallyRemarks(
+      [...noStart, clearVote(10, '5Alice', 'yes')],
+      {
+        proposalId: PROPOSAL,
+        coordinatorAddress: COORDINATOR,
+        allowedRealAddresses: new Set(['5Alice']),
+        verify: acceptAll,
+      },
+    );
+    expect(tally.invalid).toBe(1);
+    expect(invalidReasons[0].reason).toBe('no-start-remark');
+  });
+
+  it('deduplicates clear votes by real address: first wins', () => {
+    const { tally, clearVotes } = tallyRemarks(
+      [
+        ...minimalSetup,
+        clearVote(10, '5Alice', 'yes'),
+        clearVote(11, '5Alice', 'no'),
+      ],
+      {
+        proposalId: PROPOSAL,
+        coordinatorAddress: COORDINATOR,
+        allowedRealAddresses: new Set(['5Alice']),
+        verify: acceptAll,
+      },
+    );
+    expect(tally).toMatchObject({ yes: 1, no: 0, totalVoted: 1 });
+    expect(clearVotes).toHaveLength(1);
+    expect(clearVotes[0].choice).toBe('yes');
+  });
+
+  it('ignores clear votes for a different proposal', () => {
+    const { tally } = tallyRemarks(
+      [
+        ...minimalSetup,
+        clearVote(10, '5Alice', 'yes', 'other-proposal'),
+      ],
+      {
+        proposalId: PROPOSAL,
+        coordinatorAddress: COORDINATOR,
+        allowedRealAddresses: new Set(['5Alice']),
+        verify: acceptAll,
+      },
+    );
+    expect(tally.totalVoted).toBe(0);
+    expect(tally.invalid).toBe(0);
+  });
+
+  it('counts both anon and clear votes from the same real address', () => {
+    // Documented property: cross-path dedup is impossible because
+    // key image ↔ real address is not derivable. A voter who casts
+    // both (dual-device or malicious) will be counted twice. We
+    // rely on the allowlist trust model to prevent this.
+    const fakeSig = (keyImage: string): RingSignature => ({
+      challenge: '11'.repeat(32),
+      responses: ['22'.repeat(32), '33'.repeat(32)],
+      key_image: keyImage,
+    });
+    const anonVote: RemarkLike = {
+      blockNumber: 10,
+      signer: 'gas-addr',
+      text: encodeVoteRemark({
+        proposalId: PROPOSAL,
+        choice: 'yes',
+        ringBlock: 2,
+        sig: fakeSig('aa'.repeat(32)),
+      }),
+    };
+    const clear = clearVote(11, '5Alice', 'no');
+    const { tally } = tallyRemarks([...minimalSetup, anonVote, clear], {
+      proposalId: PROPOSAL,
+      coordinatorAddress: COORDINATOR,
+      allowedRealAddresses: new Set(['5Alice', '5Bob']),
+      verify: acceptAll,
+    });
+    expect(tally).toEqual({
+      yes: 1,
+      no: 1,
+      abstain: 0,
+      invalid: 0,
+      totalVoted: 2,
+    });
   });
 });
 

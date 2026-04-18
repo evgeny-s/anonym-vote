@@ -69,6 +69,25 @@ export interface AcceptedVote extends VotePayload {
 }
 
 /**
+ * Parsed clear-vote remark. Used when a voter has lost their VK
+ * secret (e.g. switched devices after announce) but is still on the
+ * allowlist and needs to vote. The signer is the real wallet — no
+ * ring signature, no anonymity. Folded into the same tally buckets
+ * as anonymous votes; dedup is by real-address signer, not key
+ * image.
+ */
+export interface ClearVotePayload {
+  proposalId: string;
+  choice: Choice;
+}
+
+export interface AcceptedClearVote extends ClearVotePayload {
+  blockNumber: number;
+  /** SS58 real wallet that signed the extrinsic. */
+  realAddress: string;
+}
+
+/**
  * Reason a vote remark was bucketed as `invalid`. Surfaced in the
  * tally so the UI can show "vote at block X rejected because Y"
  * instead of a generic "failed verification" counter.
@@ -79,6 +98,8 @@ export type InvalidReason =
   | 'ring-too-small' // ring at vote.rb has < 2 members
   | 'sig-verify-failed' // BLSAG verify returned false (math)
   | 'sig-structural-error' // verifier threw (malformed bytes)
+  | 'clear-vote-not-allowed' // clear-vote signer is not on the allowlist
+  | 'clear-vote-not-announced' // clear-vote signer did not announce pre-start
   | 'unknown-error';
 
 export interface InvalidVoteEntry {
@@ -128,6 +149,7 @@ export type RingSigVerify = (
 
 const ANNOUNCE_PREFIX = 'anon-vote-v2:announce:';
 const START_PREFIX = 'anon-vote-v2:start:';
+const CLEAR_VOTE_PREFIX = 'anon-vote-v2:clear-vote:';
 
 /**
  * Build the text body of an announce remark. Caller publishes it via
@@ -292,6 +314,47 @@ export function parseVoteRemark(text: string): VotePayload | null {
       key_image: (sig.key_image as string).toLowerCase(),
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Clear vote remark — non-anonymous fallback for voters who have lost
+// their VK secret (e.g. changed devices after announce) and cannot
+// produce a ring signature. Signed on-chain by the voter's REAL
+// wallet; the extrinsic signer IS the voter identity, so no ring
+// math is involved. Tally accepts it only if the signer is on the
+// allowlist and the block is post-start, and dedups by signer
+// (first-wins-per-real-address).
+//
+// Trade-off: the voter's choice is public and permanently linked to
+// their real address. Anonymity for other voters is not broken —
+// their ring signatures remain verifiable — but the effective
+// anonymity set shrinks by one per clear voter.
+// ---------------------------------------------------------------------------
+
+export function encodeClearVoteRemark(
+  proposalId: string,
+  choice: Choice,
+): string {
+  if (proposalId.includes(':')) {
+    throw new Error(`proposalId must not contain ':' (got "${proposalId}")`);
+  }
+  if (!CHOICES.includes(choice)) {
+    throw new Error(`invalid choice "${choice}"`);
+  }
+  return `${CLEAR_VOTE_PREFIX}${proposalId}:${choice}`;
+}
+
+export function parseClearVoteRemark(text: string): ClearVotePayload | null {
+  if (typeof text !== 'string' || !text.startsWith(CLEAR_VOTE_PREFIX)) {
+    return null;
+  }
+  const rest = text.slice(CLEAR_VOTE_PREFIX.length);
+  const idx = rest.indexOf(':');
+  if (idx <= 0) return null;
+  const proposalId = rest.slice(0, idx);
+  const choice = rest.slice(idx + 1);
+  if (!CHOICES.includes(choice as Choice)) return null;
+  return { proposalId, choice: choice as Choice };
 }
 
 // ---------------------------------------------------------------------------
@@ -492,7 +555,7 @@ export function computeRingAt(
  * proposal: every vote is verified against the exact snapshot the
  * voter saw at sign time.
  *
- * Each vote remark must satisfy ALL of:
+ * Each anonymous vote remark must satisfy ALL of:
  *   1. parses as a vote payload (and includes a non-negative `rb`)
  *   2. targets the requested proposal
  *   3. has a structurally-valid choice
@@ -504,9 +567,18 @@ export function computeRingAt(
  * that fails (5) is silently dropped — duplicate key images are how
  * we prevent double-voting, not an error.
  *
- * Order matters for (5): we walk vote remarks in block-ascending
- * order so "first remark wins per nullifier". Caller doesn't need
- * to pre-sort.
+ * Clear-vote remarks (cross-device fallback for voters who lost
+ * their VK sk) are accepted when signer is on the allowlist and the
+ * block is post-start; dedup is by signer (first-wins-per-real-
+ * address) and they are folded into the same yes/no/abstain buckets.
+ * Anon and clear votes are independent — a voter who cast both
+ * (malicious or dual-device case) will be counted twice; cross-path
+ * dedup is impossible because key image ↔ real address is not
+ * derivable.
+ *
+ * Order matters for (5): we walk remarks in block-ascending order
+ * so "first remark wins per nullifier" and "first clear vote wins
+ * per real address". Caller doesn't need to pre-sort.
  */
 export function tallyRemarks(
   remarks: RemarkLike[],
@@ -519,6 +591,7 @@ export function tallyRemarks(
 ): {
   tally: Tally;
   votes: AcceptedVote[];
+  clearVotes: AcceptedClearVote[];
   votingStartBlock: number | null;
   invalidReasons: InvalidVoteEntry[];
 } {
@@ -530,8 +603,17 @@ export function tallyRemarks(
     totalVoted: 0,
   };
   const seenKeyImage = new Set<string>();
+  const seenClearVoter = new Set<string>();
   const accepted: AcceptedVote[] = [];
+  const acceptedClear: AcceptedClearVote[] = [];
   const invalidReasons: InvalidVoteEntry[] = [];
+
+  // Signers that have a valid pre-start announce for this proposal.
+  // Clear-vote is gated on prior registration: a voter who skipped
+  // the announce phase cannot use the public fallback to bypass
+  // registration entirely. Computed lazily after we know
+  // `votingStartBlock`.
+  const announcedSigners = new Set<string>();
 
   // The coordinator opens voting by publishing a start remark.
   // Until that remark is observed, no votes count. The check
@@ -543,6 +625,28 @@ export function tallyRemarks(
     proposalId: opts.proposalId,
     coordinatorAddress: opts.coordinatorAddress,
   });
+
+  // Walk announces once to populate `announcedSigners`. Same filter
+  // as `reconstructRing`: match the proposal, match the allowlist
+  // (when provided), and land strictly before the start block (or
+  // at any block if the coordinator hasn't opened voting yet — but
+  // in that case clear-votes will be rejected by the pre-start rule
+  // anyway).
+  if (votingStartBlock !== null) {
+    for (const r of remarks) {
+      const parsed = parseAnnounceRemark(r.text);
+      if (!parsed) continue;
+      if (parsed.proposalId !== opts.proposalId) continue;
+      if (
+        opts.allowedRealAddresses &&
+        !opts.allowedRealAddresses.has(r.signer)
+      ) {
+        continue;
+      }
+      if (r.blockNumber >= votingStartBlock) continue;
+      announcedSigners.add(r.signer);
+    }
+  }
 
   const recordInvalid = (
     blockNumber: number,
@@ -559,6 +663,70 @@ export function tallyRemarks(
   const sorted = [...remarks].sort((a, b) => a.blockNumber - b.blockNumber);
 
   for (const r of sorted) {
+    // Clear-vote branch: plain-text remark signed by the real wallet.
+    // Cheap prefix check; returns null for anything else.
+    const clear = parseClearVoteRemark(r.text);
+    if (clear) {
+      if (clear.proposalId !== opts.proposalId) continue;
+
+      if (votingStartBlock === null) {
+        recordInvalid(
+          r.blockNumber,
+          null,
+          'no-start-remark',
+          'no start remark from coordinator observed yet',
+        );
+        continue;
+      }
+      if (r.blockNumber < votingStartBlock) {
+        recordInvalid(
+          r.blockNumber,
+          null,
+          'pre-start-vote',
+          `clear-vote in block ${r.blockNumber} but start remark at ${votingStartBlock}`,
+        );
+        continue;
+      }
+      if (
+        opts.allowedRealAddresses &&
+        !opts.allowedRealAddresses.has(r.signer)
+      ) {
+        recordInvalid(
+          r.blockNumber,
+          null,
+          'clear-vote-not-allowed',
+          `signer ${r.signer} is not on the allowlist`,
+        );
+        continue;
+      }
+      // Prior-announce gate. Clear-vote is a fallback for voters
+      // who DID register but lost their VK sk — not a bypass of the
+      // announce phase. A voter who never announced gets nothing.
+      if (!announcedSigners.has(r.signer)) {
+        recordInvalid(
+          r.blockNumber,
+          null,
+          'clear-vote-not-announced',
+          `signer ${r.signer} did not publish an announce before the start block`,
+        );
+        continue;
+      }
+      // First-wins dedup by real address. Silent drop (same policy
+      // as duplicate key images for anon votes).
+      if (seenClearVoter.has(r.signer)) continue;
+      seenClearVoter.add(r.signer);
+
+      tally[clear.choice]++;
+      tally.totalVoted++;
+      acceptedClear.push({
+        proposalId: clear.proposalId,
+        choice: clear.choice,
+        blockNumber: r.blockNumber,
+        realAddress: r.signer,
+      });
+      continue;
+    }
+
     const payload = parseVoteRemark(r.text);
     if (!payload) continue;
     if (payload.p !== opts.proposalId) continue;
@@ -659,7 +827,13 @@ export function tallyRemarks(
     accepted.push({ ...payload, blockNumber: r.blockNumber });
   }
 
-  return { tally, votes: accepted, votingStartBlock, invalidReasons };
+  return {
+    tally,
+    votes: accepted,
+    clearVotes: acceptedClear,
+    votingStartBlock,
+    invalidReasons,
+  };
 }
 
 // ---------------------------------------------------------------------------
