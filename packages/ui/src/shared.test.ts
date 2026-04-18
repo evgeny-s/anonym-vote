@@ -205,9 +205,7 @@ describe('clear-vote remark', () => {
   });
 
   it('rejects proposalId with colon', () => {
-    expect(() =>
-      encodeClearVoteRemark('bad:id', 'yes'),
-    ).toThrow();
+    expect(() => encodeClearVoteRemark('bad:id', 'yes')).toThrow();
   });
 
   it('rejects unknown choice on encode', () => {
@@ -932,10 +930,7 @@ describe('tallyRemarks (clear votes)', () => {
 
   it('ignores clear votes for a different proposal', () => {
     const { tally } = tallyRemarks(
-      [
-        ...minimalSetup,
-        clearVote(10, '5Alice', 'yes', 'other-proposal'),
-      ],
+      [...minimalSetup, clearVote(10, '5Alice', 'yes', 'other-proposal')],
       {
         proposalId: PROPOSAL,
         coordinatorAddress: COORDINATOR,

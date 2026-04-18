@@ -617,11 +617,11 @@ export default function VoteScreen({
             }}
           >
             ✗ You did not register during the announce phase. The coordinator
-            has already opened voting, and post-start registrations are
-            rejected by the protocol — so neither an anonymous nor a public
-            vote is available for this proposal. The public fallback is
-            reserved for voters who registered on time but later lost access
-            to their voting key.
+            has already opened voting, and post-start registrations are rejected
+            by the protocol — so neither an anonymous nor a public vote is
+            available for this proposal. The public fallback is reserved for
+            voters who registered on time but later lost access to their voting
+            key.
           </div>
         )}
 
@@ -643,9 +643,9 @@ export default function VoteScreen({
               >
                 ⚠︎ Your voting key is not on this device. If you click a choice
                 below, your vote will be published{' '}
-                <strong>publicly, signed by your real wallet</strong> —
-                everyone will see how you voted. Anonymity is not available
-                without the original browser's local storage.
+                <strong>publicly, signed by your real wallet</strong> — everyone
+                will see how you voted. Anonymity is not available without the
+                original browser's local storage.
               </div>
             )}
             <div className="vs-choices">

@@ -126,8 +126,8 @@ function PublicVoteInfoModal({
         <div className="hiw-body">
           <p>
             Anonymous voting relies on a <strong>voting key</strong> saved
-            locally in the voter's browser during registration. Without that
-            key the voter cannot produce a ring signature and cannot cast an
+            locally in the voter's browser during registration. Without that key
+            the voter cannot produce a ring signature and cannot cast an
             anonymous vote on a different device.
           </p>
           <p>
@@ -139,8 +139,8 @@ function PublicVoteInfoModal({
           </p>
           <p>
             Public votes are counted exactly like anonymous ones in the Vote
-            distribution — the only difference is that the link between the
-            real address and the choice is visible to everyone.
+            distribution — the only difference is that the link between the real
+            address and the choice is visible to everyone.
           </p>
         </div>
       </div>
@@ -281,8 +281,8 @@ export default function ResultsScreen({
             Accepted votes ({votes.length + clearVotes.length})
           </div>
           <p className="res-blocks-hint">
-            Each row is a <code>system.remark</code> accepted by the tally.
-            The <em>key image</em> is the stable per-voter identifier used for
+            Each row is a <code>system.remark</code> accepted by the tally. The{' '}
+            <em>key image</em> is the stable per-voter identifier used for
             dedup; different key images mean different voters, but nothing in
             the row reveals which allowlisted account that voter is.
           </p>
@@ -308,8 +308,7 @@ export default function ResultsScreen({
               ].sort((a, b) => a.blockNumber - b.blockNumber);
 
               return rows.map((row) => {
-                const blockHash =
-                  blockHashByNumber.get(row.blockNumber) ?? '';
+                const blockHash = blockHashByNumber.get(row.blockNumber) ?? '';
                 const key =
                   row.kind === 'anon'
                     ? `anon:${row.keyImage}`
