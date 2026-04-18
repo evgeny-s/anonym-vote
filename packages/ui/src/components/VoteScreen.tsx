@@ -35,7 +35,9 @@ import {
   type Choice,
   dripMessageHex,
   encodeAnnounceRemark,
+  encodeClearVoteRemark,
   encodeVoteRemark,
+  parseClearVoteRemark,
   computeRingAt,
   voteMessageHex,
 } from '@anon-vote/shared';
@@ -90,6 +92,12 @@ export interface VoteScreenProps {
   ring: RingState;
   phase: VotingPhase;
   votes: AcceptedVote[];
+  /**
+   * Total counted ballots — anonymous + clear-vote. Used for the
+   * Timeline counter so it matches the ResultsScreen "Voted" metric.
+   * `votes` alone would undercount clear-vote fallbacks.
+   */
+  totalVoted: number;
 }
 
 export default function VoteScreen({
@@ -98,6 +106,7 @@ export default function VoteScreen({
   ring,
   phase,
   votes,
+  totalVoted,
 }: VoteScreenProps) {
   const [step, setStep] = useState<Step>('pick');
   const [selected, setSelected] = useState<Choice | null>(null);
@@ -105,6 +114,7 @@ export default function VoteScreen({
   const [gas, setGas] = useState<GasWallet | null>(null);
   const [blockHash, setBlockHash] = useState<string | null>(null);
   const [statusMsg, setStatusMsg] = useState<string>('');
+  const [wasClearVote, setWasClearVote] = useState(false);
 
   // The cast() async pipeline lives across many React re-renders.
   // It captures `indexer` in its closure on the first call, which
@@ -120,12 +130,26 @@ export default function VoteScreen({
 
   const realAddress: string | null = wallet?.address ?? null;
 
-  // Did this voter already cast a counted vote? Detect by computing
-  // the key image of the local VK secret (if any) and matching it
-  // against accepted votes. If we have no local VK, we can't have
-  // voted from this device — fall back to ring.myAnnouncedVk only.
+  // Did this voter already cast a counted vote? Two independent
+  // channels:
+  //   - Anonymous: key image of our local VK matches an accepted
+  //     vote's key image. Requires localStorage to contain the VK sk.
+  //   - Clear-vote fallback: our real address has signed a clear-vote
+  //     remark on chain. This one works even when the VK sk is gone,
+  //     which is exactly the cross-device case the fallback exists
+  //     for.
   const alreadyVoted = useMemo(() => {
     if (!realAddress) return false;
+    // Clear-vote check: scan indexed remarks for a clear-vote signed
+    // by this real address for this proposal.
+    const castClearAlready = indexer.remarks.some((r) => {
+      if (r.signer !== realAddress) return false;
+      const parsed = parseClearVoteRemark(r.text);
+      return parsed !== null && parsed.proposalId === PROPOSAL.id;
+    });
+    if (castClearAlready) return true;
+
+    // Anonymous-vote check: requires VK sk locally.
     const vk = peekVotingKey(PROPOSAL.id, realAddress);
     if (!vk) return false;
     let myKi: string;
@@ -135,7 +159,7 @@ export default function VoteScreen({
       return false;
     }
     return votes.some((v) => v.sig.key_image === myKi);
-  }, [realAddress, votes]);
+  }, [realAddress, votes, indexer.remarks]);
 
   function reset(): void {
     setSelected(null);
@@ -143,6 +167,7 @@ export default function VoteScreen({
     setErrMsg('');
     setBlockHash(null);
     setStatusMsg('');
+    setWasClearVote(false);
   }
 
   /**
@@ -364,9 +389,55 @@ export default function VoteScreen({
   }
 
   /**
-   * Publish an announce remark by asking the polkadot.js extension
-   * to sign it from the real wallet. Returns the block number it
-   * landed in (so we can wait for the indexer to catch up).
+   * Clear-vote fallback. Used when the voter's VK sk is not in
+   * localStorage (typical: they announced on a different device and
+   * the sk does not follow them). The vote is signed on-chain by
+   * the real wallet and carries a plain-text `clear-vote` remark —
+   * no ring signature, no anonymity. The tally accepts it so long
+   * as the signer is on the allowlist and the block is post-start.
+   *
+   * Why this path instead of letting the existing lazy-announce
+   * branch in `cast()` run: a post-start announce is dropped from
+   * the ring by the tally (see reconstructRing in shared), so
+   * ring-signing with a freshly-announced key produces a signature
+   * that verifies against a ring the tally rejects — the vote ends
+   * up silently invalid. The clear-vote path is the only way to
+   * cast a counted vote from a device with no pre-existing VK.
+   */
+  async function castClear(choice: Choice): Promise<void> {
+    if (!realAddress) return;
+    const confirmed = window.confirm(
+      'Your voting key is not on this device, so this vote will NOT be anonymous. ' +
+        'Your real wallet address will be permanently linked to your choice on chain. ' +
+        'This action cannot be undone. Proceed?',
+    );
+    if (!confirmed) return;
+
+    setSelected(choice);
+    setErrMsg('');
+    setStatusMsg('');
+    setWasClearVote(true);
+    try {
+      setStep('submitting');
+      setStatusMsg('Approve clear-vote in your wallet extension…');
+      const text = encodeClearVoteRemark(PROPOSAL.id, choice);
+      const block = await publishAnnounceFromRealWallet(realAddress, text);
+      indexer.forceCatchUp(block);
+
+      setStatusMsg('');
+      setBlockHash(null);
+      setStep('done');
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : String(e));
+      setStep('error');
+    }
+  }
+
+  /**
+   * Publish a remark (announce or clear-vote) by asking the
+   * polkadot.js extension to sign it from the real wallet. Returns
+   * the block number it landed in (so we can wait for the indexer
+   * to catch up).
    */
   async function publishAnnounceFromRealWallet(
     realAddress: string,
@@ -440,7 +511,7 @@ export default function VoteScreen({
         state={timelineState}
         phase={phase}
         registered={ring.announcedVoterCount}
-        voted={votes.length}
+        voted={totalVoted}
         totalAllowed={PROPOSAL.allowedVoters.length}
       />
 
@@ -474,9 +545,9 @@ export default function VoteScreen({
           <div className="vs-already-icon">✓</div>
           <h3>Vote already counted</h3>
           <p>
-            A vote with your voting key's key image is already on chain and
-            accepted by the tally. Further submissions are silently dropped by
-            the nullifier check.
+            A vote from you is already on chain and accepted by the tally.
+            Further submissions from this real address or this voting key are
+            silently dropped by the dedup rules.
           </p>
         </div>
       )}
@@ -534,15 +605,56 @@ export default function VoteScreen({
       {step === 'pick' &&
         canAct &&
         !alreadyVoted &&
-        phase.phase === 'voting' && (
+        phase.phase === 'voting' &&
+        ring.myAnnouncedVk === null && (
+          <div
+            className="vs-warn"
+            style={{
+              borderColor: '#ef4444',
+              background: 'rgba(239, 68, 68, 0.08)',
+              color: '#b91c1c',
+              fontWeight: 600,
+            }}
+          >
+            ✗ You did not register during the announce phase. The coordinator
+            has already opened voting, and post-start registrations are rejected
+            by the protocol — so neither an anonymous nor a public vote is
+            available for this proposal. The public fallback is reserved for
+            voters who registered on time but later lost access to their voting
+            key.
+          </div>
+        )}
+
+      {step === 'pick' &&
+        canAct &&
+        !alreadyVoted &&
+        phase.phase === 'voting' &&
+        ring.myAnnouncedVk !== null && (
           <>
+            {!localVk && (
+              <div
+                className="vs-warn"
+                style={{
+                  borderColor: '#f59e0b',
+                  background: 'rgba(245, 158, 11, 0.08)',
+                  color: '#b45309',
+                  fontWeight: 600,
+                }}
+              >
+                ⚠︎ Your voting key is not on this device. If you click a choice
+                below, your vote will be published{' '}
+                <strong>publicly, signed by your real wallet</strong> — everyone
+                will see how you voted. Anonymity is not available without the
+                original browser's local storage.
+              </div>
+            )}
             <div className="vs-choices">
               {CHOICES.map((c) => (
                 <button
                   key={c.id}
                   className="vs-choice"
                   style={{ '--accent': c.color } as React.CSSProperties}
-                  onClick={() => cast(c.id)}
+                  onClick={() => (localVk ? cast(c.id) : castClear(c.id))}
                 >
                   <span className="vs-choice-label">{c.label}</span>
                   <span className="vs-choice-sub">{c.sub}</span>
@@ -554,7 +666,7 @@ export default function VoteScreen({
               <span>
                 {isRegistered
                   ? `You're registered. Click a choice — no wallet popup needed. Ring size ${ring.ring.length} of ${PROPOSAL.allowedVoters.length}.`
-                  : `You haven't registered yet. Clicking a choice will publish a registration via your wallet (one extension popup), then immediately ring-sign and publish your vote.`}
+                  : `Your voting key is not on this device. Clicking a choice will publish a non-anonymous vote from your real wallet after confirmation.`}
               </span>
             </div>
           </>
@@ -638,8 +750,9 @@ export default function VoteScreen({
           <h3>Vote submitted</h3>
           <p>
             Your choice <strong>{selected?.toUpperCase()}</strong> is on chain.
-            Extrinsic signer is a throwaway gas address; the ring signature
-            inside proves some ring member voted, without revealing which.
+            {wasClearVote
+              ? ' Signed by your real wallet — this vote is public and permanently linked to your address.'
+              : ' Extrinsic signer is a throwaway gas address; the ring signature inside proves some ring member voted, without revealing which.'}
           </p>
           {blockHash && (
             <div className="vs-tlock-note" style={{ wordBreak: 'break-all' }}>

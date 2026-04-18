@@ -63,7 +63,10 @@ export default function App() {
   const indexer = useIndexer(PROPOSAL);
   const ring = useRing(indexer.remarks, PROPOSAL, wallet.address ?? null);
   const phase = useVotingPhase(indexer.remarks, PROPOSAL);
-  const { tally, votes, invalidReasons } = useTally(indexer.remarks, PROPOSAL);
+  const { tally, votes, clearVotes, invalidReasons } = useTally(
+    indexer.remarks,
+    PROPOSAL,
+  );
 
   const isAllowlisted = Boolean(wallet.isAllowed);
 
@@ -207,6 +210,7 @@ export default function App() {
             ring={ring}
             phase={phase}
             votes={votes}
+            totalVoted={tally.totalVoted}
           />
         )}
 
@@ -216,6 +220,7 @@ export default function App() {
             ring={ring}
             tally={tally}
             votes={votes}
+            clearVotes={clearVotes}
             invalidReasons={invalidReasons}
             config={PROPOSAL}
           />
