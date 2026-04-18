@@ -7,6 +7,7 @@ import { Command } from 'commander';
 import { runVerify } from './commands/verify';
 import { runAnnounce } from './commands/announce';
 import { runVote } from './commands/vote';
+import { runCheckRegistration } from './commands/check-registration';
 import type { Choice } from '@anon-vote/shared';
 import type { WalletSource } from './wallet';
 import { defaultKeyDir } from './keystore';
@@ -102,6 +103,45 @@ program
       startBlock: opts.startBlock,
       allowed: opts.allowed,
       coordinator: opts.coordinator,
+      toBlock: opts.toBlock,
+      concurrency: opts.concurrency,
+      json: Boolean(opts.json),
+    });
+    process.exit(code);
+  });
+
+// ─── check-registration ───────────────────────────────────────────────────
+
+program
+  .command('check-registration')
+  .description(
+    'Check whether a wallet address has a valid announce remark on chain ' +
+      'and its voting key is in the canonical ring.',
+  )
+  .requiredOption('--ws <url>', 'Subtensor WS endpoint')
+  .requiredOption('--expected-genesis <hex>', 'Pinned genesis hash')
+  .requiredOption(
+    '--faucet-url <url>',
+    'Faucet base URL (source of truth for proposalId, startBlock, allowlist)',
+  )
+  .requiredOption('--address <ss58>', 'SS58 address of the wallet to check')
+  .option('--proposal <id>', 'Override proposalId (default: from /faucet/info)')
+  .option(
+    '--allowed <csv>',
+    'Override allowlist (default: from /faucet/info)',
+    parseCsv,
+  )
+  .option('--to-block <n>', 'Last block to include', (v) => Number.parseInt(v, 10))
+  .option('--concurrency <n>', 'Parallel block fetches', (v) => Number.parseInt(v, 10), 16)
+  .option('--json', 'Machine-readable output', false)
+  .action(async (opts) => {
+    const code = await runCheckRegistration({
+      ws: opts.ws,
+      expectedGenesis: opts.expectedGenesis,
+      faucetUrl: opts.faucetUrl,
+      address: opts.address,
+      proposal: opts.proposal,
+      allowed: opts.allowed,
       toBlock: opts.toBlock,
       concurrency: opts.concurrency,
       json: Boolean(opts.json),

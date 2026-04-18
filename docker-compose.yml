@@ -52,6 +52,25 @@ services:
       - --faucet-url
       - ${FAUCET_URL:-https://api-vote.tao.com}
 
+  # ── check-registration ──────────────────────────────────────────
+  # Check whether a wallet's announce landed on chain and its VK is
+  # in the canonical ring.
+  #
+  #   ADDRESS=5Grw... docker compose run --rm check-registration
+  #   ADDRESS=5Grw... docker compose run --rm check-registration --json
+  check-registration:
+    <<: *common
+    command:
+      - check-registration
+      - --ws
+      - ${WS_URL:-wss://archive-rocksdb.internal.tao.com}
+      - --expected-genesis
+      - ${EXPECTED_GENESIS:-0x2f0555cc76fc2840a25a6ea3b9637146806f1f44b090c175ffde2a7e5ab36c03}
+      - --faucet-url
+      - ${FAUCET_URL:-https://api-vote.tao.com}
+      - --address
+      - ${ADDRESS:?ADDRESS is required (SS58 address of the wallet to check)}
+
   # ── announce ─────────────────────────────────────────────────────
   # Generate a voting key and publish the announce remark.
   # Requires a wallet keystore JSON mounted at /wallet.
