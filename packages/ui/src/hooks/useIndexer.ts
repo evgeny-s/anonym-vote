@@ -410,9 +410,7 @@ export function useIndexer(config: ProposalConfig): IndexerSnapshot {
                 const preserved = remarksRef.current.filter(
                   (r) => r.blockNumber < from,
                 );
-                const freshUpTo = collected.filter(
-                  (r) => r.blockNumber <= st,
-                );
+                const freshUpTo = collected.filter((r) => r.blockNumber <= st);
                 writeCache(slot, {
                   scannedThrough: st,
                   remarks: [...preserved, ...freshUpTo],
