@@ -62,7 +62,7 @@ export default function App() {
   const wallet = useWallet([...PROPOSAL.allowedVoters]);
   const indexer = useIndexer(PROPOSAL);
   const ring = useRing(indexer.remarks, PROPOSAL, wallet.address ?? null);
-  const phase = useVotingPhase(indexer.remarks, PROPOSAL);
+  const phase = useVotingPhase(indexer.remarks, PROPOSAL, indexer.head);
   const { tally, votes, clearVotes, invalidReasons } = useTally(
     indexer.remarks,
     PROPOSAL,
@@ -211,6 +211,7 @@ export default function App() {
             phase={phase}
             votes={votes}
             totalVoted={tally.totalVoted}
+            onGoToResults={() => setTab('results')}
           />
         )}
 

@@ -95,6 +95,7 @@ export interface AcceptedClearVote extends ClearVotePayload {
 export type InvalidReason =
   | 'no-start-remark' // coordinator hasn't opened voting yet
   | 'pre-start-vote' // vote landed at or before the start block
+  | 'post-end-vote' // vote landed at or after the configured end block
   | 'ring-too-small' // ring at vote.rb has < 2 members
   | 'sig-verify-failed' // BLSAG verify returned false (math)
   | 'sig-structural-error' // verifier threw (malformed bytes)
@@ -587,6 +588,18 @@ export function tallyRemarks(
     coordinatorAddress: string;
     allowedRealAddresses?: ReadonlySet<string>;
     verify: RingSigVerify;
+    /**
+     * Exclusive upper bound on vote block numbers. Votes and clear-
+     * votes at or after this block are bucketed as `post-end-vote`.
+     * `null`/omitted = open-ended proposal (no deadline).
+     *
+     * Semantics mirror `votingStartBlock`: votes are counted in the
+     * half-open interval `[votingStartBlock, endBlock)`. Consistent
+     * with the UI, which flips into the "ended" phase once chain
+     * head reaches `endBlock` — any vote initiated at that moment
+     * would land in `endBlock` or later and be rejected here.
+     */
+    endBlock?: number | null;
   },
 ): {
   tally: Tally;
@@ -625,6 +638,8 @@ export function tallyRemarks(
     proposalId: opts.proposalId,
     coordinatorAddress: opts.coordinatorAddress,
   });
+
+  const endBlock = opts.endBlock ?? null;
 
   // Walk announces once to populate `announcedSigners`. Same filter
   // as `reconstructRing`: match the proposal, match the allowlist
@@ -684,6 +699,15 @@ export function tallyRemarks(
           null,
           'pre-start-vote',
           `clear-vote in block ${r.blockNumber} but start remark at ${votingStartBlock}`,
+        );
+        continue;
+      }
+      if (endBlock !== null && r.blockNumber >= endBlock) {
+        recordInvalid(
+          r.blockNumber,
+          null,
+          'post-end-vote',
+          `clear-vote in block ${r.blockNumber} but proposal closed at ${endBlock}`,
         );
         continue;
       }
@@ -749,6 +773,15 @@ export function tallyRemarks(
         payload.rb,
         'pre-start-vote',
         `vote in block ${r.blockNumber} but start remark at ${votingStartBlock}`,
+      );
+      continue;
+    }
+    if (endBlock !== null && r.blockNumber >= endBlock) {
+      recordInvalid(
+        r.blockNumber,
+        payload.rb,
+        'post-end-vote',
+        `vote in block ${r.blockNumber} but proposal closed at ${endBlock}`,
       );
       continue;
     }

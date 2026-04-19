@@ -36,6 +36,12 @@ export interface FaucetInfo {
   faucetAddress: string;
   proposalId: string;
   startBlock: number;
+  /**
+   * Exclusive upper bound on vote block numbers, or `null` for an
+   * open-ended proposal. Exposed so the CLI auditor applies the same
+   * rejection rule as the UI's tally without needing a separate env.
+   */
+  endBlock: number | null;
   scannedThrough: number;
   head: number;
   announcedVoterCount: number;
@@ -268,6 +274,7 @@ export class FaucetService {
       faucetAddress: this.subtensor.getFaucetAddress(),
       proposalId: this.config.proposalId,
       startBlock: this.config.proposal.startBlock,
+      endBlock: this.config.proposal.endBlock,
       scannedThrough: this.ringIndexer.getScannedThrough(),
       head: this.ringIndexer.getHead(),
       announcedVoterCount: this.ringIndexer.getAnnouncedVoterCount(),

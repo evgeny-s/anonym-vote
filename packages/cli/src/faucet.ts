@@ -14,6 +14,8 @@ export interface FaucetInfo {
   faucetAddress: string;
   proposalId: string;
   startBlock: number;
+  /** Exclusive upper bound on accepted vote blocks; `null` = open-ended. */
+  endBlock: number | null;
   scannedThrough: number;
   head: number;
   announcedVoterCount: number;
@@ -43,6 +45,10 @@ export async function getFaucetInfo(faucetUrl: string): Promise<FaucetInfo> {
         'coordinatorAddress — is the faucet on a version that exposes them?',
     );
   }
+  // endBlock is nullable (open-ended proposal) and only appeared in
+  // recent faucet versions. Normalize undefined → null so downstream
+  // callers can use `?? null` confidently.
+  if (body.endBlock === undefined) body.endBlock = null;
   return body as FaucetInfo;
 }
 

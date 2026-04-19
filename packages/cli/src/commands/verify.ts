@@ -34,6 +34,7 @@ export interface VerifyArgs {
   /** Overrides for values otherwise pulled from `/faucet/info`. */
   proposal?: string;
   startBlock?: number;
+  endBlock?: number | null;
   allowed?: string[];
   coordinator?: string;
   toBlock?: number;
@@ -46,6 +47,7 @@ interface VerifyResult {
   wsUrl: string;
   genesisHash: string;
   startBlock: number;
+  endBlock: number | null;
   scannedThrough: number;
   head: number;
   coordinatorAddress: string;
@@ -68,10 +70,11 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
   }
   const proposalId = args.proposal ?? info.proposalId;
   const startBlock = args.startBlock ?? info.startBlock;
+  const endBlock = args.endBlock !== undefined ? args.endBlock : info.endBlock;
   const allowed = args.allowed ?? info.allowedVoters;
   const coordinator = args.coordinator ?? info.coordinatorAddress;
   process.stderr.write(
-    `Faucet: proposal=${info.proposalId}  startBlock=${info.startBlock}  allowed=${info.allowedVoters.length}  coordinator=${info.coordinatorAddress}\n`,
+    `Faucet: proposal=${info.proposalId}  startBlock=${info.startBlock}  endBlock=${info.endBlock ?? '(open)'}  allowed=${info.allowedVoters.length}  coordinator=${info.coordinatorAddress}\n`,
   );
   const allowedSet = new Set(allowed);
 
@@ -126,6 +129,7 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
         coordinatorAddress: coordinator,
         allowedRealAddresses: allowedSet,
         verify: verifyRingSig,
+        endBlock,
       },
     );
 
@@ -145,6 +149,7 @@ export async function runVerify(args: VerifyArgs): Promise<number> {
       wsUrl: args.ws,
       genesisHash: chain.genesisHash,
       startBlock,
+      endBlock,
       scannedThrough: toBlock,
       head: chain.head,
       coordinatorAddress: coordinator,

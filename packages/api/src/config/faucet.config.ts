@@ -17,12 +17,20 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 export interface ProposalConfig {
   readonly id: string;
   /**
-   * First block scanned for announce remarks. There is no end
-   * block — voting is open-ended, late voters are explicitly
-   * supported, and per-proposal isolation is achieved by setting a
-   * fresh `startBlock` for each new proposal.
+   * First block scanned for announce remarks. Per-proposal isolation
+   * is achieved by setting a fresh `startBlock` for each new proposal.
    */
   readonly startBlock: number;
+  /**
+   * Optional exclusive upper bound on vote block numbers. Votes at or
+   * after this block are bucketed as `post-end-vote` by `tallyRemarks`.
+   * `null` means open-ended (late voters in other timezones can cast
+   * whenever).
+   *
+   * Exposed on `/faucet/info` so the UI and CLI auditor agree on
+   * where the proposal closes.
+   */
+  readonly endBlock: number | null;
 }
 
 @Injectable()
@@ -73,9 +81,21 @@ export class FaucetConfig implements OnModuleInit {
       throw new Error('PROPOSAL_START_BLOCK must be a non-negative integer');
     }
 
+    const endBlockRaw = process.env.PROPOSAL_END_BLOCK;
+    let endBlock: number | null = null;
+    if (endBlockRaw && endBlockRaw.trim()) {
+      endBlock = Number(endBlockRaw);
+      if (!Number.isInteger(endBlock) || endBlock <= startBlock) {
+        throw new Error(
+          `PROPOSAL_END_BLOCK must be an integer strictly greater than PROPOSAL_START_BLOCK (${startBlock})`,
+        );
+      }
+    }
+
     this.proposal = {
       id: required('PROPOSAL_ID'),
       startBlock,
+      endBlock,
     };
 
     // Comma-separated SS58 addresses. Must exactly match the UI's
@@ -117,6 +137,9 @@ export class FaucetConfig implements OnModuleInit {
     this.logger.log(`Subtensor WS:             ${this.subtensorWs}`);
     this.logger.log(`Proposal id:              ${this.proposal.id}`);
     this.logger.log(`Start block:              ${this.proposal.startBlock}`);
+    this.logger.log(
+      `End block:                ${this.proposal.endBlock ?? '(open-ended)'}`,
+    );
     this.logger.log(`Allowed voters:           ${this.allowedVoters.length}`);
     this.logger.log(`Coordinator address:      ${this.coordinatorAddress}`);
     this.logger.log(

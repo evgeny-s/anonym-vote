@@ -29,10 +29,17 @@ export function useTally(
         coordinatorAddress: config.coordinatorAddress,
         allowedRealAddresses: new Set(config.allowedVoters),
         verify: ringVerify,
+        endBlock: config.endBlock,
       }),
     // Dependency on the array reference (immutable within an
     // indexer update) plus identity of allowedVoters/id is enough
     // for stable memoization.
-    [remarks, config.id, config.coordinatorAddress, config.allowedVoters],
+    [
+      remarks,
+      config.id,
+      config.coordinatorAddress,
+      config.allowedVoters,
+      config.endBlock,
+    ],
   );
 }

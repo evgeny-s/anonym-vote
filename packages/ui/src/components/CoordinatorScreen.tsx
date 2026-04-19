@@ -102,6 +102,36 @@ export default function CoordinatorScreen({
 
   // ---------- render ----------
 
+  // Voting has ended — the coordinator has nothing to do anymore.
+  if (phase.phase === 'ended') {
+    return (
+      <div className="vs-root">
+        <div className="vs-proposal">
+          <div className="vs-proposal-header">
+            <span className="vs-pid">{PROPOSAL.id}</span>
+            <span className="vs-deadline">coordinator</span>
+          </div>
+          <h2 className="vs-ptitle">Voting has ended</h2>
+          <p className="vs-pdesc">
+            This proposal closed at block <code>{phase.endBlock ?? '—'}</code>.
+            {phase.startBlock !== null ? (
+              <>
+                {' '}
+                Voting was opened at block <code>{phase.startBlock}</code>.
+              </>
+            ) : (
+              <>
+                {' '}
+                No start remark was ever published — the end block was reached
+                before voting could be opened.
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Voting is already open — nothing more to do.
   if (phase.startBlock !== null) {
     return (

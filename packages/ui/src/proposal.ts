@@ -32,11 +32,16 @@ export interface ProposalConfig {
    * vote remarks from before this block are out of scope. Per-
    * proposal isolation comes from setting a fresh `startBlock`
    * for each new proposal.
-   *
-   * There is no end block: voting is open-ended. Late voters in
-   * other timezones can vote whenever they want.
    */
   readonly startBlock: number;
+  /**
+   * Optional last block at which votes are counted. Once chain head
+   * reaches this block the UI flips to an "ended" state — the Vote
+   * screen shows a closed-voting card with a link to the Results
+   * tab, and further voting is refused. Null means open-ended
+   * (late voters in other timezones can vote whenever they want).
+   */
+  readonly endBlock: number | null;
   /**
    * SS58 address of the coordinator wallet. The coordinator's
    * only protocol power is to publish a `start` remark on chain
@@ -74,12 +79,23 @@ function envInt(key: string, fallback: number): number {
   return n;
 }
 
+function envIntOrNull(key: string, fallback: number | null): number | null {
+  const v = import.meta.env[key] as string | undefined;
+  if (!v || !v.trim()) return fallback;
+  const n = Number.parseInt(v, 10);
+  if (!Number.isFinite(n)) {
+    throw new Error(`${key} must be an integer, got ${JSON.stringify(v)}`);
+  }
+  return n;
+}
+
 export const PROPOSAL: ProposalConfig = {
   id: envStr('VITE_PROPOSAL_ID', 'proposal-1'),
   title: envStr('VITE_PROPOSAL_TITLE', 'Release to Mainnet (Week of Apr 13)'),
   description: envStr('VITE_PROPOSAL_DESCRIPTION', ''),
   allowedVoters: envCsv('VITE_PROPOSAL_ALLOWED_VOTERS', []),
   startBlock: envInt('VITE_PROPOSAL_START_BLOCK', 7962121),
+  endBlock: envIntOrNull('VITE_PROPOSAL_END_BLOCK', null),
   coordinatorAddress: envStr(
     'VITE_PROPOSAL_COORDINATOR',
     '5Ff9wuYWk2r8qKutC5NKGBqEVY2rty5JXCBTXz5Tm7ndiWwQ',

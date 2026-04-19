@@ -98,6 +98,8 @@ export interface VoteScreenProps {
    * `votes` alone would undercount clear-vote fallbacks.
    */
   totalVoted: number;
+  /** Switch the app to the Results tab (used by the ended-state CTA). */
+  onGoToResults: () => void;
 }
 
 export default function VoteScreen({
@@ -107,6 +109,7 @@ export default function VoteScreen({
   phase,
   votes,
   totalVoted,
+  onGoToResults,
 }: VoteScreenProps) {
   const [step, setStep] = useState<Step>('pick');
   const [selected, setSelected] = useState<Choice | null>(null);
@@ -497,11 +500,11 @@ export default function VoteScreen({
   // Map voter state to which dot in the timeline is active.
   // For non-eligible viewers (no wallet / wrong wallet), the
   // timeline reflects the OBJECTIVE proposal phase (announce or
-  // voting), not any per-voter progression.
+  // voting / ended), not any per-voter progression.
   const timelineState: 'register' | 'vote' | 'done' =
     step === 'done' || alreadyVoted
       ? 'done'
-      : phase.phase === 'voting'
+      : phase.phase === 'voting' || phase.phase === 'ended'
         ? 'vote'
         : 'register';
 
@@ -529,10 +532,30 @@ export default function VoteScreen({
         />
       </div>
 
+      {/* Voting has ended — supersedes every per-voter action below.
+          Shown to everyone (eligible, ineligible, disconnected) so
+          late visitors immediately understand why there are no action
+          buttons, with a direct link to the final tally. */}
+      {phase.phase === 'ended' && step === 'pick' && (
+        <div className="vs-already">
+          <div className="vs-already-icon">⏱</div>
+          <h3>Voting has ended</h3>
+          <p>
+            This proposal closed at block <code>{phase.endBlock ?? '—'}</code>.
+            No further registrations or votes will be counted.
+          </p>
+          <div className="vs-review-actions" style={{ marginTop: 16 }}>
+            <button className="vs-btn-primary" onClick={onGoToResults}>
+              View results
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Non-eligible viewer (no wallet, or wrong wallet). Timeline
           and proposal info above are still rendered so they can see
           the proposal state — they just can't take action. */}
-      {step === 'pick' && !canAct && (
+      {step === 'pick' && !canAct && phase.phase !== 'ended' && (
         <div className="vs-warn">
           {!realAddress
             ? 'Connect your Polkadot wallet to take part in this proposal. The timeline above shows the current state.'
@@ -540,7 +563,7 @@ export default function VoteScreen({
         </div>
       )}
 
-      {step === 'pick' && canAct && alreadyVoted && (
+      {step === 'pick' && canAct && alreadyVoted && phase.phase !== 'ended' && (
         <div className="vs-already">
           <div className="vs-already-icon">✓</div>
           <h3>Vote already counted</h3>
@@ -838,21 +861,24 @@ function Timeline({
 
   // Stage 2 (Coordinator starts) — instantaneous checkpoint, never
   // the "current" stage on its own. Pending until the start remark
-  // appears, then immediately Done.
-  const stage2: StageStatus = phase.phase === 'voting' ? 'done' : 'pending';
+  // appears (or until we reach the ended state, in which case it
+  // has necessarily passed), then Done.
+  const stage2: StageStatus =
+    phase.phase === 'voting' || phase.phase === 'ended' ? 'done' : 'pending';
 
   // Stage 3 (Voting period) — remains active for the whole voting
   // phase. When THIS voter has cast a vote we switch to 'voted' so
   // the dot gets a checkmark and the meta label reads "In progress
-  // — your vote counted". The voting period itself doesn't "end"
-  // just because one senator has voted, so we deliberately don't
-  // mark it as 'done'.
+  // — your vote counted". Once the proposal reaches its end block
+  // the whole stage flips to 'done' for everyone.
   const stage3: StageStatus =
-    phase.phase !== 'voting'
-      ? 'pending'
-      : state === 'done'
-        ? 'voted'
-        : 'active';
+    phase.phase === 'ended'
+      ? 'done'
+      : phase.phase !== 'voting'
+        ? 'pending'
+        : state === 'done'
+          ? 'voted'
+          : 'active';
 
   // The lines connecting stages mirror the destination stage's
   // status: a line going INTO a stage that has been reached
@@ -870,11 +896,13 @@ function Timeline({
 
   // Sub-stat: contextual one-liner.
   const subStat =
-    phase.phase === 'voting' && phase.startBlock !== null
-      ? `coordinator opened voting at block ${phase.startBlock}`
-      : phase.phase === 'announce'
-        ? 'waiting for coordinator to publish the start remark'
-        : 'voting is open';
+    phase.phase === 'ended'
+      ? `voting closed at block ${phase.endBlock ?? '—'}`
+      : phase.phase === 'voting' && phase.startBlock !== null
+        ? `coordinator opened voting at block ${phase.startBlock}`
+        : phase.phase === 'announce'
+          ? 'waiting for coordinator to publish the start remark'
+          : 'voting is open';
 
   return (
     <div className="tl-root">

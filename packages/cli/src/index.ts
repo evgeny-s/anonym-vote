@@ -82,6 +82,12 @@ program
     (v) => Number.parseInt(v, 10),
   )
   .option(
+    '--end-block <n>',
+    'Override end block — votes at or after this block are rejected. ' +
+      'Pass "none" for an open-ended run. (default: from /faucet/info)',
+    (v) => (v === 'none' ? null : Number.parseInt(v, 10)),
+  )
+  .option(
     '--allowed <csv>',
     'Override allowlist (default: from /faucet/info)',
     parseCsv,
@@ -100,6 +106,7 @@ program
       faucetUrl: opts.faucetUrl,
       proposal: opts.proposal,
       startBlock: opts.startBlock,
+      endBlock: opts.endBlock,
       allowed: opts.allowed,
       coordinator: opts.coordinator,
       toBlock: opts.toBlock,
