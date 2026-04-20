@@ -80,6 +80,7 @@ jobs:
           VITE_PROPOSAL_ALLOWED_VOTERS: ${{ vars.VITE_PROPOSAL_ALLOWED_VOTERS }}
           VITE_PROPOSAL_START_BLOCK: ${{ vars.VITE_PROPOSAL_START_BLOCK }}
           VITE_PROPOSAL_COORDINATOR: ${{ vars.VITE_PROPOSAL_COORDINATOR }}
+          VITE_PROPOSAL_END_BLOCK: ${{ vars.VITE_PROPOSAL_END_BLOCK }}
 
       - name: Upload production-ready build files
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
