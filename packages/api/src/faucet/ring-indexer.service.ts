@@ -222,7 +222,7 @@ export class RingIndexerService implements OnModuleInit, OnModuleDestroy {
     let lastLogged = 0;
     const startedAt = Date.now();
 
-    const CONCURRENCY = 6;
+    const CONCURRENCY = 10;
     const worker = async (): Promise<void> => {
       while (!this.destroyed) {
         const n = next++;
