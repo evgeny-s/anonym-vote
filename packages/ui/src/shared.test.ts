@@ -1317,4 +1317,132 @@ describe('end-to-end with real BLSAG', () => {
     expect(votes.length).toBe(1);
     expect(votes[0].c).toBe('yes');
   });
+
+  it('regression: pre-start voter can still vote after someone else re-announces post-start', () => {
+    // Mirrors the on-chain incident: Alice announces pre-start and
+    // is the innocent voter. Bob announces pre-start too, then
+    // re-announces post-start with a new VK. The tally's ring for
+    // Alice's rb must stay {Alice.pre, Bob.pre} — the post-start
+    // Bob.new must NOT leak in, otherwise Alice's ring signature
+    // fails despite her having done everything right.
+    //
+    // This is exactly what happens when the SIGNING side calls
+    // computeRingAt without `votingStartBlock`: the client-side ring
+    // grows past the start block while the verifier's doesn't, and
+    // BLSAG rejects the divergence with "ring signature did not
+    // verify".
+    const alice = realKeygen();
+    const bobPre = realKeygen();
+    const bobPost = realKeygen();
+
+    const remarks: RemarkLike[] = [
+      {
+        blockNumber: 10,
+        signer: '5Alice',
+        text: encodeAnnounceRemark(PROPOSAL, alice.pk),
+      },
+      {
+        blockNumber: 15,
+        signer: '5Bob',
+        text: encodeAnnounceRemark(PROPOSAL, bobPre.pk),
+      },
+      {
+        blockNumber: 20,
+        signer: COORDINATOR,
+        text: encodeStartRemark(PROPOSAL),
+      },
+      // Bob re-announces post-start — protocol rejects, but a buggy
+      // client that omits votingStartBlock would include it.
+      {
+        blockNumber: 25,
+        signer: '5Bob',
+        text: encodeAnnounceRemark(PROPOSAL, bobPost.pk),
+      },
+    ];
+
+    // Alice's browser signs at scannedThrough=25, AFTER Bob's
+    // post-start announce is indexed. The correct ring to sign
+    // against — the one the tally will rebuild — is the one WITH
+    // votingStartBlock filtering.
+    const aliceRing = computeRingAt(remarks, {
+      proposalId: PROPOSAL,
+      atBlock: 25,
+      votingStartBlock: 20,
+    });
+    expect(aliceRing).toHaveLength(2);
+    expect(aliceRing).toContain(alice.pk);
+    expect(aliceRing).toContain(bobPre.pk);
+    expect(aliceRing).not.toContain(bobPost.pk);
+
+    const aliceSig = realSign(
+      alice.sk,
+      aliceRing,
+      voteMessageHex(PROPOSAL, 'yes', 25),
+    );
+
+    remarks.push({
+      blockNumber: 30,
+      signer: 'gas-alice',
+      text: encodeVoteRemark({
+        proposalId: PROPOSAL,
+        choice: 'yes',
+        ringBlock: 25,
+        sig: aliceSig,
+      }),
+    });
+
+    const { tally } = tallyRemarks(remarks, {
+      proposalId: PROPOSAL,
+      coordinatorAddress: COORDINATOR,
+      verify: realVerify,
+    });
+    expect(tally).toEqual({
+      yes: 1,
+      no: 0,
+      abstain: 0,
+      invalid: 0,
+      totalVoted: 1,
+    });
+
+    // And the counter-proof: if the client had forgotten to pass
+    // votingStartBlock, latest-wins would resolve Bob to his
+    // post-start VK, so the ring would contain bobPost.pk where the
+    // tally expects bobPre.pk. Same ring SIZE, different MEMBERS —
+    // BLSAG hashes the exact ring bytes, so the signature is
+    // rejected. Confirm the divergence exists so a future refactor
+    // that re-drops the flag gets caught.
+    const buggyClientRing = computeRingAt(remarks, {
+      proposalId: PROPOSAL,
+      atBlock: 25,
+    });
+    expect(buggyClientRing).toHaveLength(2);
+    expect(buggyClientRing).toContain(alice.pk);
+    expect(buggyClientRing).toContain(bobPost.pk);
+    expect(buggyClientRing).not.toContain(bobPre.pk);
+    const buggySig = realSign(
+      alice.sk,
+      buggyClientRing,
+      voteMessageHex(PROPOSAL, 'no', 25),
+    );
+    const buggyRemarks: RemarkLike[] = [
+      ...remarks.slice(0, 4), // announces + start, no votes yet
+      {
+        blockNumber: 31,
+        signer: 'gas-alice-buggy',
+        text: encodeVoteRemark({
+          proposalId: PROPOSAL,
+          choice: 'no',
+          ringBlock: 25,
+          sig: buggySig,
+        }),
+      },
+    ];
+    const buggyResult = tallyRemarks(buggyRemarks, {
+      proposalId: PROPOSAL,
+      coordinatorAddress: COORDINATOR,
+      verify: realVerify,
+    });
+    expect(buggyResult.tally.invalid).toBe(1);
+    expect(buggyResult.tally.no).toBe(0);
+  });
 });

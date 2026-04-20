@@ -356,25 +356,7 @@ indistinguishable from random without the secret `k`.
   participation as well would require a different primitive
   (mixnet or stealth-registration) and is explicitly out of scope.
 
-### 2.9 Known bugs / TODO
-
-- **UI `computeRingAt` in the vote pipeline does not pass
-  `votingStartBlock`** (`packages/ui/src/components/VoteScreen.tsx`,
-  around the `cast()` ringBlock reconstruction). The tally's
-  `computeRingAt` DOES pass it, so the two disagree: the UI
-  believes a ring includes a freshly-announced VK from a post-start
-  "lazy announce", but the tally rejects that same announce and
-  verifies the ring signature against a smaller ring, failing.
-  Effect today: a late voter who hadn't announced before the
-  coordinator's start remark lands can produce a signature that
-  the UI accepts locally but the tally silently counts as
-  `sig-verify-failed` invalid. Workaround: the clear-vote fallback
-  below covers the only legitimate source of this (voter on a new
-  device with no VK). Fix: thread `votingStartBlock` through the
-  UI call too; drop the lazy-announce branch entirely since
-  clear-vote is the right path for that case.
-
-### 2.10 Clear-vote fallback (cross-device)
+### 2.9 Clear-vote fallback (cross-device)
 
 A voter who announced on one device but needs to vote from another
 cannot produce a ring signature: the VK secret lives only in the
