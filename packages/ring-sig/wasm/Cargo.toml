@@ -7,6 +7,9 @@ license.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
 [dependencies]
 stp-crypto = { path = "../vendored/blsag", default-features = false, features = ["std", "signing"] }
 curve25519-dalek = { version = "4", default-features = false, features = ["alloc", "rand_core"] }
