@@ -276,10 +276,16 @@ export default function VoteScreen({
       // to include our VK.
       const liveSnap = indexerRef.current;
       const ringBlock = liveSnap.scannedThrough;
+      // `votingStartBlock` is required for the client ring to match
+      // the one the faucet and tally reconstruct. Without it, any
+      // post-start announce pollutes the client ring but is rejected
+      // by the verifier, and every signature fails BLSAG — including
+      // from voters who registered correctly pre-start.
       const currentRing = computeRingAt([...liveSnap.remarks], {
         proposalId: PROPOSAL.id,
         atBlock: ringBlock,
         allowedRealAddresses: new Set(PROPOSAL.allowedVoters),
+        votingStartBlock: phase.startBlock,
       });
 
       if (currentRing.length < 2) {
