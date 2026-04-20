@@ -211,6 +211,17 @@ export class RingIndexerService implements OnModuleInit, OnModuleDestroy {
     const out: RemarkLike[] = [];
     let next = from;
 
+    // Progress is only meaningful when a scan spans many blocks —
+    // otherwise the per-head catch-up (typically 1 block) would spam
+    // the log. Threshold is generous on purpose: initial catch-up
+    // always trips it, late-catch-up after a WS hiccup also trips it,
+    // steady-state head ticks never do.
+    const total = to - from + 1;
+    const shouldLogProgress = total >= 1000;
+    let done = 0;
+    let lastLogged = 0;
+    const startedAt = Date.now();
+
     const CONCURRENCY = 6;
     const worker = async (): Promise<void> => {
       while (!this.destroyed) {
@@ -243,6 +254,18 @@ export class RingIndexerService implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(
             `block ${n} fetch failed: ${err instanceof Error ? err.message : String(err)}`,
           );
+        } finally {
+          done++;
+          if (shouldLogProgress && done - lastLogged >= 1000) {
+            lastLogged = done;
+            const pct = ((done / total) * 100).toFixed(1);
+            const elapsedMs = Date.now() - startedAt;
+            const bps = done / (elapsedMs / 1000);
+            const etaSec = bps > 0 ? Math.round((total - done) / bps) : 0;
+            this.logger.log(
+              `scan progress: ${done}/${total} (${pct}%) · ${bps.toFixed(0)} blk/s · ETA ${etaSec}s · remarks found=${out.length}`,
+            );
+          }
         }
       }
     };
