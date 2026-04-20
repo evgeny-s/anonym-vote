@@ -211,7 +211,7 @@ export class RingIndexerService implements OnModuleInit, OnModuleDestroy {
     const out: RemarkLike[] = [];
     let next = from;
 
-    const CONCURRENCY = 8;
+    const CONCURRENCY = 2;
     const worker = async (): Promise<void> => {
       while (!this.destroyed) {
         const n = next++;
