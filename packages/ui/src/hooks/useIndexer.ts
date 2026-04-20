@@ -62,6 +62,19 @@ const CATCHUP_THRESHOLD = 10;
  */
 const SAFETY_MARGIN = 10;
 /**
+ * Persist intermediate progress to localStorage mid-scan every this
+ * many newly-scanned blocks. Bounds how much work is lost if the tab
+ * is closed or the page reloads during a long catch-up. The final
+ * authoritative write still happens at the end of each scan run.
+ */
+const PERSIST_CHUNK_BLOCKS = 500;
+/**
+ * Time-based companion to PERSIST_CHUNK_BLOCKS: on a slow network a
+ * 500-block chunk may take a while, so also persist at least this
+ * often. Whichever condition trips first wins.
+ */
+const PERSIST_MAX_INTERVAL_MS = 5_000;
+/**
  * Minimum time any non-ready banner (`indexing` or `catching-up`) is
  * shown, in ms. Fast delta scans tend to finish in hundreds of
  * milliseconds and without this hold the banner would strobe on and
@@ -355,6 +368,8 @@ export function useIndexer(config: ProposalConfig): IndexerSnapshot {
         try {
           if (!api) return;
           const collected: IndexedRemark[] = [];
+          let lastPersistedBlock = scannedThroughRef.current;
+          let lastPersistedAt = performance.now();
           const { scannedThrough } = await scanRemarks(api, from, to, {
             // Bumped from 8: an archive WS happily multiplexes more
             // in-flight requests than that, and the "catching up"
@@ -377,6 +392,32 @@ export function useIndexer(config: ProposalConfig): IndexerSnapshot {
                 scannedThroughRef.current,
                 st,
               );
+
+              // Chunked persist: on long initial scans a reload would
+              // otherwise lose the entire in-flight range. Only include
+              // remarks whose block is <= st, since workers ahead of
+              // the contiguous prefix may have emitted remarks for
+              // blocks not yet safely scanned. remarksRef is left
+              // untouched — the UI intentionally doesn't update
+              // mid-scan (see comment above).
+              const now = performance.now();
+              const blocksSince = st - lastPersistedBlock;
+              const msSince = now - lastPersistedAt;
+              if (
+                blocksSince >= PERSIST_CHUNK_BLOCKS ||
+                msSince >= PERSIST_MAX_INTERVAL_MS
+              ) {
+                const preserved = remarksRef.current.filter(
+                  (r) => r.blockNumber < from,
+                );
+                const freshUpTo = collected.filter((r) => r.blockNumber <= st);
+                writeCache(slot, {
+                  scannedThrough: st,
+                  remarks: [...preserved, ...freshUpTo],
+                });
+                lastPersistedBlock = st;
+                lastPersistedAt = now;
+              }
             },
           });
           if (abort.signal.aborted) return;
